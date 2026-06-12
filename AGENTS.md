@@ -1,5 +1,288 @@
 # AGENTS.md
 
+## Git / GitHub 工作流（Agent 必须遵守）
+
+本项目使用 Git 做本地版本管理，使用 GitHub 作为远程备份与协作仓库。Agent 在任何代码、文档、配置变更前后，都必须主动维护版本状态，目标是：小步提交、可回滚、可审查、不覆盖用户改动、不泄露隐私。
+
+### 0. 固定仓库信息
+
+- 本地仓库目录：`D:\我的网站\TIEDAN's Web`
+- 远程仓库：`https://github.com/TIEDANlts/tiedan-web.git`
+- 默认主分支：`main`
+- 默认远程名：`origin`
+
+如果 remote 缺失，Agent 应配置：
+
+```bash
+git remote add origin https://github.com/TIEDANlts/tiedan-web.git
+git branch -M main
+```
+
+如果出现 `dubious ownership`，优先使用一次性参数继续工作：
+
+```bash
+git -c safe.directory="D:/我的网站/TIEDAN's Web" status
+```
+
+只有在用户同意后，才允许写入全局 safe.directory：
+
+```bash
+git config --global --add safe.directory "D:/我的网站/TIEDAN's Web"
+```
+
+### 1. 每次开始工作前
+
+Agent 必须先执行并阅读结果：
+
+```bash
+git status --short --branch
+git remote -v
+git log --oneline -5
+```
+
+然后判断：
+
+- 如果工作区有用户未提交改动，必须保护这些改动；不得覆盖、回滚、删除。
+- 如果改动与当前任务有关，先说明会如何基于现有改动继续。
+- 如果改动与当前任务无关，忽略它们，不要顺手格式化或重构。
+- 如果远程可访问，开始较大任务前先同步：
+
+```bash
+git switch main
+git pull --rebase origin main
+```
+
+如果 `pull` 产生冲突，Agent 必须停止并说明冲突文件与建议处理方式，不得擅自解决不确定冲突。
+
+### 2. 分支策略
+
+小型文档修正可以直接在 `main` 上完成。实现 Stage、功能、修复 bug、重构或任何多文件改动时，必须从 `main` 创建工作分支：
+
+```bash
+git switch main
+git pull --rebase origin main
+git switch -c stage-0-bootstrap
+```
+
+分支命名规则：
+
+- Stage 工作：`stage-数字-简短名称`，例如 `stage-0-bootstrap`
+- 功能：`feature/简短名称`，例如 `feature/blog-editor`
+- 修复：`fix/简短名称`，例如 `fix/auth-redirect`
+- 文档：`docs/简短名称`，例如 `docs/git-workflow`
+
+如果分支已存在，使用：
+
+```bash
+git switch 分支名
+```
+
+### 3. 写代码前的版本保护
+
+动手前必须确认：
+
+- 已阅读 `AGENTS.md`、`docs/PLAN.md`、`docs/PROGRESS.md`
+- 已说明本次任务属于哪个 Stage 或哪个明确范围
+- 已给出实施计划并获得用户确认，除非用户明确要求“直接执行”
+- 已确认没有要先备份的未提交改动
+
+涉及依赖、数据库 schema、认证、上传、部署、缓存、金额、时间等高风险区域时，必须先说明影响面和验证方式。
+
+### 4. 提交节奏
+
+Agent 必须小步提交，不要把大量无关改动塞进一个 commit。
+
+建议提交时机：
+
+- 完成一个清晰的功能点
+- 修复一个独立 bug
+- 完成一次可验证的文档更新
+- 完成一个 Stage 的验收要求
+
+提交前必须执行：
+
+```bash
+git status --short
+git diff --check
+git diff --stat
+```
+
+实现代码变更后，按本项目约定运行：
+
+```bash
+npm run check
+```
+
+如果当前阶段已经有 e2e 或用户要求浏览器验证，再运行：
+
+```bash
+npm run e2e
+```
+
+文档-only 改动可以不运行 `npm run check`，但最终汇报必须明确说明“未运行，因为仅修改文档”。
+
+### 5. Commit 信息规范
+
+提交信息使用简洁英文，优先采用以下格式：
+
+```text
+type(scope): summary
+```
+
+常用类型：
+
+- `feat`：新增功能
+- `fix`：修复问题
+- `docs`：文档更新
+- `chore`：配置、脚手架、依赖等杂项
+- `test`：测试
+- `refactor`：不改变行为的重构
+
+示例：
+
+```bash
+git commit -m "docs: add git workflow for agents"
+git commit -m "feat(stage-0): scaffold next app"
+git commit -m "fix(auth): protect private routes"
+```
+
+### 6. 推送到 GitHub
+
+首次推送当前分支：
+
+```bash
+git push -u origin 当前分支名
+```
+
+之后推送：
+
+```bash
+git push
+```
+
+如果是 `main`：
+
+```bash
+git push origin main
+```
+
+如果因为登录、token、网络审批或权限失败，Agent 不得绕过限制；必须把失败原因、当前本地 commit hash、需要用户手动执行的命令说清楚。
+
+### 7. 合并回 main
+
+工作分支完成并通过验证后，优先让用户确认再合并。合并流程：
+
+```bash
+git switch main
+git pull --rebase origin main
+git merge --no-ff 工作分支名
+git push origin main
+```
+
+如果用户希望走 GitHub Pull Request，Agent 应推送分支并给出 PR 创建链接或 `gh pr create` 命令。没有用户确认，不要删除远程分支。
+
+### 8. 严禁操作
+
+除非用户明确点名要求并理解后果，Agent 禁止执行：
+
+```bash
+git reset --hard
+git clean -fd
+git checkout -- .
+git restore .
+git push --force
+git push --force-with-lease
+git rebase -i
+```
+
+也禁止：
+
+- 删除用户未提交改动
+- 为了通过检查而移除测试或降低规则
+- 把 `.env`、密钥、token、数据库密码、私有备份文件提交进仓库
+- 大范围格式化与当前任务无关的文件
+- 在不说明原因的情况下修改历史提交
+
+### 9. 隐私与 .gitignore 规则
+
+真正的密钥只放本地环境，不进 Git。需要提交的是示例文件：
+
+- 可以提交：`.env.example`
+- 禁止提交：`.env`、`.env.local`、`.env.production`、`*.pem`、`*.key`
+
+如果发现敏感文件已被 staged，必须先取消暂存：
+
+```bash
+git restore --staged 文件名
+```
+
+然后补充 `.gitignore`，再重新提交安全内容。
+
+### 10. 冲突处理
+
+遇到 merge、rebase、pull 冲突时：
+
+1. 运行 `git status --short` 查看冲突文件。
+2. 说明冲突来源：本地改动、远程改动、还是同一文件双向修改。
+3. 对确定无歧义的冲突可以修复。
+4. 对业务含义不确定的冲突必须询问用户。
+5. 冲突解决后运行相关验证，再提交。
+
+不得用“全部采用本地”或“全部采用远程”这种粗暴方式处理业务文件，除非用户明确要求。
+
+### 11. Stage 完成时
+
+每个 Stage 完成后必须：
+
+```bash
+git status --short
+npm run check
+```
+
+并更新 `docs/PROGRESS.md`：
+
+- 完成内容
+- 关键文件
+- 与 `docs/PLAN.md` 的偏离
+- 遗留 TODO
+- 验证结果
+
+然后提交：
+
+```bash
+git add .
+git commit -m "feat(stage-X): complete stage name"
+git push
+```
+
+如果只是文档或计划更新，使用：
+
+```bash
+git commit -m "docs: update progress"
+```
+
+### 12. 最终汇报格式
+
+Agent 完成任务后，必须向用户汇报：
+
+- 当前分支
+- 最新 commit hash
+- 是否已 push 到 GitHub
+- 运行了哪些验证命令，结果如何
+- 哪些文件被修改
+- 是否有未提交改动
+- 如果 push 失败，用户需要手动执行的准确命令
+
+示例：
+
+```text
+当前分支：main
+最新提交：abc1234 docs: add git workflow for agents
+已推送：否，GitHub 登录需要你授权
+验证：未运行 npm run check，因为本次只修改文档
+未提交改动：无
+```
+
 ## 项目是什么
 单用户的个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
 完整实施方案见 docs/PLAN.md（按 Stage 推进，当前做到哪个 Stage 见 docs/PROGRESS.md 与我的指示）。
