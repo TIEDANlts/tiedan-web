@@ -1,0 +1,180 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--surface);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--surface);
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--ink);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--ink-2);
+  --color-destructive: var(--module-expenses);
+  --color-destructive-foreground: var(--surface);
+  --color-input: var(--border);
+  --color-ring: var(--primary);
+
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--ink);
+
+  --color-chart-1: var(--module-games);
+  --color-chart-2: var(--module-media);
+  --color-chart-3: var(--module-trips);
+  --color-chart-4: var(--module-expenses);
+  --color-chart-5: var(--module-todos);
+
+  --color-sidebar: var(--surface);
+  --color-sidebar-foreground: var(--ink);
+  --color-sidebar-primary: var(--primary);
+  --color-sidebar-primary-foreground: var(--surface);
+  --color-sidebar-accent: var(--surface-2);
+  --color-sidebar-accent-foreground: var(--ink);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-ring: var(--primary);
+
+  --color-module-games: var(--module-games);
+  --color-module-media: var(--module-media);
+  --color-module-trips: var(--module-trips);
+  --color-module-expenses: var(--module-expenses);
+  --color-module-todos: var(--module-todos);
+  --color-module-posts: var(--module-posts);
+  --color-module-links: var(--module-links);
+  --color-module-special-days: var(--module-special-days);
+
+  --radius-sm: var(--app-radius-sm);
+  --radius-md: var(--app-radius-md);
+  --radius-lg: var(--app-radius-lg);
+  --radius-xl: var(--app-radius-xl);
+  --radius-2xl: var(--app-radius-pill);
+  --radius-3xl: var(--app-radius-pill);
+  --radius-4xl: var(--app-radius-pill);
+
+  --font-sans: var(--font-ui), var(--font-zh-sans);
+  --font-serif: var(--font-public-serif), var(--font-zh-serif);
+  --font-mono: var(--font-number), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-heading: var(--font-public-serif), var(--font-zh-serif);
+}
+
+:root {
+  color-scheme: light;
+  --font-zh-sans: "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  --font-zh-serif: "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", serif;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+.theme-public {
+  --bg: #FAFAF7;
+  --surface: #FFFFFF;
+  --surface-2: #F4F1EA;
+  --ink: #1A1A18;
+  --ink-2: #57544E;
+  --ink-3: #76726A;
+  --border: #E5E2DA;
+  --primary: #8C2F39;
+  --accent: #8C2F39;
+  --app-radius-sm: 2px;
+  --app-radius-md: 4px;
+  --app-radius-lg: 8px;
+  --app-radius-xl: 8px;
+  --app-radius-pill: 9999px;
+}
+
+.dark .theme-public,
+.theme-public.dark {
+  --bg: #14130F;
+  --surface: #1C1A15;
+  --surface-2: #242019;
+  --ink: #F4F1E8;
+  --ink-2: #A8A296;
+  --ink-3: #8A847A;
+  --border: #2E2A22;
+  --primary: #C25B65;
+  --accent: #C25B65;
+}
+
+.theme-private {
+  --bg: #FAF6F1;
+  --surface: #FFFFFF;
+  --surface-2: #F3EDE4;
+  --ink: #2B2622;
+  --ink-2: #6B6259;
+  --ink-3: #776D63;
+  --border: #E7DECF;
+  --primary: #9A5B2D;
+  --accent: #9A5B2D;
+  --app-radius-sm: 8px;
+  --app-radius-md: 12px;
+  --app-radius-lg: 16px;
+  --app-radius-xl: 24px;
+  --app-radius-pill: 9999px;
+}
+
+.dark .theme-private,
+.theme-private.dark {
+  --bg: #1E1A16;
+  --surface: #29231D;
+  --surface-2: #332B23;
+  --ink: #F2EAE0;
+  --ink-2: #B8ABA0;
+  --ink-3: #948878;
+  --border: #3D352B;
+  --primary: #C98A4B;
+  --accent: #C98A4B;
+}
+
+.theme-public,
+.theme-private {
+  --module-games: #8A4FA0;
+  --module-media: #D08A1E;
+  --module-trips: #1F9E86;
+  --module-expenses: #D6537E;
+  --module-todos: #3B82C4;
+  --module-posts: #8C2F39;
+  --module-links: #64748B;
+  --module-special-days: #F59E0B;
+}
+
+html {
+  min-height: 100%;
+  background: var(--bg);
+}
+
+body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui), var(--font-zh-sans);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--ink);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-bg text-ink;
+  }
+}
