@@ -15,6 +15,7 @@
   - `ADMIN_PASSWORD`
   - `SITE_URL`（RSS 与公开链接用；本地可用 `http://localhost:3000`）
   - `UPLOAD_DIR`（上传根目录；本地可留空以回退到 `public/uploads`，生产建议挂载 `/data/uploads`）
+  - `OUTBOUND_PROXY`（可选；外部图片和后续出海 API 请求代理）
 
 `AUTH_SECRET` 应使用随机值，例如：
 
@@ -81,7 +82,7 @@ Stage 3 新增拖拽排序依赖：`@dnd-kit/core@6.3.1`、`@dnd-kit/sortable@10
 
 Stage 4 未新增第三方依赖；Popover 复用已安装的 `radix-ui@1.5.0` 聚合包。
 
-Stage 5 新增图片处理依赖：`sharp@0.35.1`。上传图片会经过 `rotate()` 旋正、长边 2000px 压缩、jpeg/webp 质量 82 重编码去 EXIF/GPS，并额外生成 480px 缩略图。
+Stage 5 新增图片处理与出站请求依赖：`sharp@0.35.1`、`undici@6.26.0`。上传图片会经过 `rotate()` 旋正、长边 2000px 压缩、jpeg/webp 质量 82 重编码去 EXIF/GPS，并额外生成 480px 缩略图；外部 favicon/图片下载统一经 `src/lib/http.ts`，支持 10 秒超时、一次重试与可选 `OUTBOUND_PROXY`。
 
 ## 当前功能
 

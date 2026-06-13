@@ -1,3 +1,5 @@
+import { fetchWithRetry } from "../../lib/http";
+
 const ICON_REL_PATTERN = /<link\b[^>]*>/gi;
 const REL_PATTERN = /\brel\s*=\s*["']([^"']+)["']/i;
 const HREF_PATTERN = /\bhref\s*=\s*["']([^"']+)["']/i;
@@ -30,7 +32,7 @@ export function getFaviconCandidatesFromHtml(html: string, targetUrl: string) {
 }
 
 export async function resolveFaviconUrl(targetUrl: string) {
-  const response = await fetch(targetUrl, {
+  const response = await fetchWithRetry(targetUrl, {
     headers: {
       accept: "text/html,application/xhtml+xml",
     },

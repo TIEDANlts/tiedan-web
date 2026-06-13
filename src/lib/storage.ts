@@ -3,6 +3,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 
+import { fetchWithRetry } from "./http";
+
 export type StorageArea = "public" | "private";
 
 export type SaveResult = {
@@ -200,7 +202,7 @@ export async function save(buffer: Buffer, options: SaveOptions): Promise<SaveRe
 }
 
 export async function saveFromUrl(url: string, subdir: string) {
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     headers: {
       accept: "image/webp,image/png,image/jpeg,image/gif,*/*;q=0.8",
     },

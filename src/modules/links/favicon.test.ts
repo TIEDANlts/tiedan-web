@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { fetchWithRetry } from "../../lib/http";
+
 import { fetchAndCacheFavicon, getFaviconCandidatesFromHtml } from "./favicon";
+
+vi.mock("../../lib/http", () => ({
+  fetchWithRetry: vi.fn(),
+}));
 
 describe("getFaviconCandidatesFromHtml", () => {
   it("prefers icon link tags and resolves relative hrefs", () => {
@@ -32,14 +38,11 @@ describe("getFaviconCandidatesFromHtml", () => {
 
   it("returns the url from the storage save result", async () => {
     const save = vi.fn(async () => ({ url: "/uploads/favicons/a.webp", thumbUrl: "/uploads/favicons/a-thumb.webp" }));
+    const mockedFetchWithRetry = vi.mocked(fetchWithRetry);
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("<html></html>", { status: 200 })),
-    );
+    mockedFetchWithRetry.mockResolvedValue(new Response("<html></html>", { status: 200 }));
 
     await expect(fetchAndCacheFavicon("https://example.com", save)).resolves.toBe("/uploads/favicons/a.webp");
     expect(save).toHaveBeenCalledWith("https://example.com/favicon.ico", "favicons");
-    vi.unstubAllGlobals();
   });
 });
