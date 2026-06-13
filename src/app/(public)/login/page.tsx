@@ -11,13 +11,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const { from } = await searchParams;
 
   return (
-    <main className="theme-public flex min-h-screen items-center justify-center bg-bg px-6 py-10 text-ink">
+    <main className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-6 py-10 text-ink">
       <div className="w-full max-w-5xl">
-        <div className="mb-10 flex items-center justify-between border-b border-border pb-5 text-sm text-ink-2">
-          <span className="font-semibold text-accent">TIEDAN</span>
-          <span>私密入口</span>
-        </div>
-
         <div className="grid items-center gap-10 lg:grid-cols-[1fr_auto]">
           <div className="max-w-xl">
             <p className="mb-4 text-sm font-medium text-accent">个人生活管理网站</p>

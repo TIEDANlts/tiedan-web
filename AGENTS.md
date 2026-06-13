@@ -349,6 +349,7 @@ Vitest（单测）+ Playwright（冒烟）。
 | next-auth                 | 5.0.0-beta.30 | beta，必须锁精确版本        |
 | prisma / @prisma/client / @prisma/adapter-pg   | 7.8.0 / 7.8.0 / 7.8.0 |                             |
 | vitest / @playwright/test | vitest 4.1.8 / Playwright 待安装 |                             |
+| react-markdown / remark-gfm / rehype-pretty-code / shiki | 10.1.0 / 4.0.1 / 0.14.3 / 4.2.0 | Stage 2 Markdown 渲染与代码高亮 |
 
 - 根目录 `.npmrc` 已含 `save-exact=true`；新增任何依赖先在回复中说明用途与版本，并登记到本表。
 - 禁止擅自升级大版本；遇到"教程写法与装的版本对不上"，以装的版本的官方文档为准。

@@ -2,7 +2,7 @@
 
 单用户个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
 
-当前进度：Stage 1 已完成，Stage 2 待开始。Stage 1 已接入 Auth.js v5 Credentials 登录、默认私密的权限白名单、管理员 seed、健康检查接口和 `/todos` 私密占位页。
+当前进度：Stage 2 已完成，Stage 3 待开始。Stage 2 已接入登录后的侧边栏布局、移动端抽屉、公开页极简顶栏、通用组件库和 `/admin/playground` 临时验收页。
 
 ## 本地环境
 
@@ -72,13 +72,18 @@ npm.cmd run db:seed
 
 `npm.cmd run check` 包含 TypeScript 类型检查、ESLint 和 Vitest。
 
+Stage 2 新增 Markdown 渲染依赖：`react-markdown@10.1.0`、`remark-gfm@4.0.1`、`rehype-pretty-code@0.14.3`、`shiki@4.2.0`。
+
 ## 当前功能
 
 - 公开路由：`/login`、`/`、`/blog/**`、`/nav`、`/rss.xml`、`/uploads/**`、`/api/auth/**`、`/api/health`、`/api/posts/view`、`/api/quick/**`。
-- 私密路由：除白名单外默认要求登录。
+- 私密路由：除白名单外默认要求登录；登录后 `/` 显示仪表盘占位页和私密侧边栏。
 - 登录：Auth.js v5 Credentials，bcrypt 校验 `User.passwordHash`，JWT session 30 天。
 - Seed：`scripts/seed.ts` 幂等创建 / 更新唯一管理员。
-- 临时私密页：`/todos` 显示“待办（建设中）”。
+- 私密布局：桌面端固定侧边栏，移动端汉堡抽屉；菜单包含仪表盘、待办、日历、游戏、书影、旅行、消费、博客管理、导航管理和设置。
+- 公开布局：`/blog`、`/nav`、`/login` 使用 `theme-public` 顶栏和编辑部 token。
+- 通用组件：`PageHeader`、`EmptyState`、`ConfirmDialog`、`TagInput`、`StatusBadge`、`RatingStars`、`MarkdownEditor`、`MarkdownRenderer`。
+- 临时验收页：登录后访问 `/admin/playground`，可检查通用组件、模块色、MarkdownRenderer、亮/暗模式和对比度样例区。
 - 健康检查：`GET /api/health` 返回 `{ ok: true }`。
 
 ## 约定
