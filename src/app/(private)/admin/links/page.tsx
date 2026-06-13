@@ -1,11 +1,12 @@
-import { PrivatePlaceholderPage } from "@/components/private-placeholder-page";
+import { LinksAdmin } from "@/app/(private)/admin/links/links-admin";
+import { getGroupedLinks } from "@/modules/links/queries";
 
-export default function AdminLinksPage() {
+export default async function AdminLinksPage() {
+  const groups = await getGroupedLinks();
+
   return (
-    <PrivatePlaceholderPage
-      eyebrow="导航管理"
-      title="导航管理（建设中）"
-      description="Stage 3 会在这里接入链接分组、编辑和排序。"
-    />
+    <main className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8">
+      <LinksAdmin groups={groups} />
+    </main>
   );
 }

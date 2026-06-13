@@ -1,13 +1,21 @@
 # 项目进度
 
 ## 当前状态
-- 进行中：Stage 3（待开始）
-- 已完成：Stage 0、Stage 1、Stage 2
+- 进行中：Stage 4（待开始）
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 3 · 导航页 —— 2026-06-13 完成
+- 完成内容：新增 `Link` 数据模型与迁移，接入公开 `/nav` 导航页和私密 `/admin/links` 管理页；公开页按分组展示链接卡片并支持标题、描述、分组即时本地搜索；后台支持新增、编辑、删除与同组拖拽排序，写操作后 revalidate `/nav` 和 `/admin/links`。
+- 关键文件：`prisma/schema.prisma` 与 `prisma/migrations/20260613074632_add_links/migration.sql` 定义 Link 表；`src/modules/links/*` 封装查询、Server Actions、表单校验、分组排序与 favicon 解析；`src/lib/storage.ts` 是 Stage 3 最小版 public 上传缓存；`src/app/(public)/nav/*` 和 `src/app/(private)/admin/links/*` 分别实现公开浏览与后台管理。
+- 关键决定与偏离：新增并锁定 `@dnd-kit/core@6.3.1`、`@dnd-kit/sortable@10.0.0`、`@dnd-kit/utilities@3.2.2`；Stage 3 上传区按计划暂用 `public/uploads` 并加入 `.gitignore`，Stage 5 再扩展为完整 `UPLOAD_DIR` public/private 存储模块；未内置示例 seed，导航数据通过后台手动维护。
+- Stage 3 验收：通过 - 未登录可访问 `/nav`，无数据与无搜索结果均使用自然中文空状态；通过 - `/nav` 对标题、描述、分组做客户端即时过滤；通过 - `/admin/links` 提供新增、编辑、删除与 ConfirmDialog；通过 - 未填图标时 Server Action 尝试解析 HTML favicon 或 `/favicon.ico` 并通过 `saveFromUrl` 缓存本地，失败时前端首字母色块回退；通过 - 分组内 dnd-kit 拖拽排序调用排序 action 保存；通过 - 手机宽度下公开卡片与后台列表使用流式单列布局；通过 - 写操作 revalidate `/nav` 与 `/admin/links`。
+- 遗留 TODO：Stage 5 需要把 `src/lib/storage.ts` 扩展为完整 public/private 存储模块、sharp 图片管线和 `UPLOAD_DIR` 支持；Stage 16 继续删除 `/admin/playground` 临时验收页。
+- 验证：`npx vitest run src/modules/links/links.test.ts src/modules/links/favicon.test.ts src/lib/storage.test.ts` ✅；`wsl.exe -d Ubuntu-24.04 -- sh -lc "... docker compose -f docker-compose.dev.yml up -d"` ✅；`npx prisma migrate dev --name add_links` ✅；`npx prisma generate` ✅；`npx tsc --noEmit` ✅；`npm run lint` ✅；`npm run check` ✅。
 
 ### Stage 2 · 整体布局与通用组件 —— 2026-06-13 完成
 - 完成内容：实现登录后的 `theme-private` 私密外壳，桌面固定侧边栏、移动端汉堡抽屉、当前路由高亮、退出登录与亮/暗/跟随系统主题切换；补齐仪表盘、待办、日历、游戏、书影、旅行、消费、博客管理、导航管理、设置中文占位页；实现 `theme-public` 公开顶栏与 `/blog`、`/nav` 占位页；新增通用组件 `PageHeader`、`EmptyState`、`ConfirmDialog`、`TagInput`、`StatusBadge`、`RatingStars`、`MarkdownEditor`、`MarkdownRenderer`；新增 `/admin/playground` 临时验收页和四组合对比度样例区。
