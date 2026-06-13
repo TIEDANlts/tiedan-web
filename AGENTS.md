@@ -296,11 +296,11 @@ Vitest（单测）+ Playwright（冒烟）。
 ## 版本锁定（Stage 0 回填，之后只增不改）
 | 包                        | 版本   | 备注                        |
 | ------------------------- | ------ | --------------------------- |
-| next / react              | 待回填 |                             |
-| tailwindcss               | 待回填 | v4，CSS-first，禁止 v3 写法 |
-| next-auth                 | 待回填 | beta，必须锁精确版本        |
-| prisma / @prisma/client   | 待回填 |                             |
-| vitest / @playwright/test | 待回填 |                             |
+| next / react              | next 16.2.9 / react 19.2.4 |                             |
+| tailwindcss               | 4.3.0 | v4，CSS-first，禁止 v3 写法 |
+| next-auth                 | Stage 1 待安装 | beta，必须锁精确版本        |
+| prisma / @prisma/client   | 7.8.0 / 7.8.0 |                             |
+| vitest / @playwright/test | vitest 4.1.8 / Playwright 待安装 |                             |
 
 - 根目录 `.npmrc` 已含 `save-exact=true`；新增任何依赖先在回复中说明用途与版本，并登记到本表。
 - 禁止擅自升级大版本；遇到"教程写法与装的版本对不上"，以装的版本的官方文档为准。

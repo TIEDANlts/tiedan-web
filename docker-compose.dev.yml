@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: personal_site_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: personal_site
+      POSTGRES_USER: personal_site
+      POSTGRES_PASSWORD: personal_site
+    ports:
+      - "5432:5432"
+    volumes:
+      - personal_site_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  personal_site_postgres_data:
