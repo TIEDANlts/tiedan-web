@@ -1,13 +1,21 @@
 # 项目进度
 
 ## 当前状态
-- 进行中：Stage 4（待开始）
-- 已完成：Stage 0、Stage 1、Stage 2、Stage 3
+- 进行中：Stage 5（待开始）
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 4 · 待办模块 —— 2026-06-13 完成
+- 完成内容：新增 `Todo` 数据模型与迁移，替换 `/todos` 占位页为真实待办看板；页面包含今天（含逾期置顶）、收集箱与未来 7 天三块区域；支持快速连续添加、勾选完成/取消、切换优先级、Popover 改日期、删除，以及把逾期项批量顺延到今天。
+- 关键文件：`prisma/schema.prisma` 与 `prisma/migrations/20260613103618_add_todos/migration.sql` 定义 Todo 表；`src/modules/todos/*` 封装 UTC+8 日期逻辑、查询聚合、Server Actions 与单测；`src/app/(private)/todos/*` 实现私密待办页面和客户端交互；`src/components/ui/popover.tsx` 复用已安装 `radix-ui` 聚合包补齐 Popover。
+- 关键决定与偏离：未新增第三方依赖，Popover 直接使用既有 `radix-ui@1.5.0`；完成项不隐藏，在所在分区沉底并显示删除线；未来 7 天按“明天起连续 7 天”展示；`@db.Date` 写入使用 `YYYY-MM-DDT00:00:00.000Z`，比较与展示统一通过 `src/lib/dayjs.ts` 的 UTC+8 `YYYY-MM-DD` 逻辑，避免浏览器本地时间参与判断。
+- Stage 4 验收：通过 - 快速添加使用输入框、目标切换与选日期，提交后保持焦点便于连续录入；通过 - 勾选完成/取消、改优先级、改日期、删除均通过 Server Action 生效并 revalidate `/todos`；通过 - 昨天及更早未完成待办出现在今天分区逾期区，显示“逾期 N 天”，批量顺延后日期等于今天；通过 - 收集箱只展示 `date = null` 项；通过 - 未来 7 天按日分组，跨月边界由单测覆盖；通过 - 今天无项目时显示“今天没有待办 🎉”；通过 - 375px 宽度下页面单列流式布局，快速添加区域 sticky 并保留底部安全间距。
+- 遗留 TODO：Stage 8 日历需要为 Todo 增加跨模块 `getEvents(start, end)`；Stage 15 仪表盘需要复用今日待办数据并支持直接勾选；Stage 16 继续删除 `/admin/playground` 临时验收页。
+- 验证：`npx.cmd vitest run src/modules/todos/todos.test.ts` ✅；`wsl.exe -d Ubuntu-24.04 -- sh -lc "... docker compose -f docker-compose.dev.yml up -d"` ✅；`npx.cmd prisma migrate dev --name add_todos` ✅；`npx.cmd prisma generate` ✅；`npx.cmd tsc --noEmit` ✅；`npm.cmd run lint` ✅；`npx.cmd vitest run` ✅；`npm.cmd run check` ✅。
 
 ### Stage 3 · 导航页 —— 2026-06-13 完成
 - 完成内容：新增 `Link` 数据模型与迁移，接入公开 `/nav` 导航页和私密 `/admin/links` 管理页；公开页按分组展示链接卡片并支持标题、描述、分组即时本地搜索；后台支持新增、编辑、删除与同组拖拽排序，写操作后 revalidate `/nav` 和 `/admin/links`。
