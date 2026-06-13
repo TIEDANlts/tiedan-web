@@ -28,3 +28,13 @@ model Link {
   description String?
   sort        Int     @default(0)
 }
+
+model Todo {
+  id        String    @id @default(cuid())
+  content   String
+  date      DateTime? @db.Date
+  priority  Int       @default(0)
+  done      Boolean   @default(false)
+  doneAt    DateTime?
+  createdAt DateTime  @default(now())
+}
