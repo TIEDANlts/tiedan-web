@@ -205,6 +205,15 @@ git merge --no-ff 工作分支名
 git push origin main
 ```
 
+本项目默认授权：如果某个 Stage / 功能 / 修复分支已经满足以下条件，Agent 可以直接合并回 `main`，不必再次询问：
+
+- `npm run check` 通过。
+- 已逐条对照 `docs/PLAN.md` 当前 Stage 的验收标准，并记录通过 / 未通过 / 环境阻塞项。
+- `docs/PROGRESS.md` 已更新。
+- 工作区没有未提交的用户改动会被覆盖。
+
+直接合并时仍必须按顺序执行：切回 `main` → 尝试 `git pull --rebase origin main` → `git merge --no-ff 工作分支名` → 在合并后的 `main` 上重新运行 `npm run check` → `git push origin main`。如果 `pull`、`merge`、验证或 `push` 失败，必须停止并汇报原因。
+
 如果用户希望走 GitHub Pull Request，Agent 应推送分支并给出 PR 创建链接或 `gh pr create` 命令。没有用户确认，不要删除远程分支。
 
 ### 8. 严禁操作
