@@ -1,13 +1,21 @@
 # 项目进度
 
 ## 当前状态
-- 进行中：Stage 5（待开始）
-- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4
+- 进行中：Stage 6（待开始）
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 5 · 博客模块 + 文件存储 —— 2026-06-14 完成
+- 完成内容：新增 `Post` 数据模型与迁移，接入 `/admin/posts` 博客管理、公开 `/blog` 列表与详情、`/rss.xml`、`/api/posts/view` 浏览量上报；扩展 `src/lib/storage.ts` 为 public/private 两区存储模块，`POST /api/upload` 仅登录上传，`GET /uploads/**` 只服务 public 区并带长缓存头。
+- 关键文件：`prisma/schema.prisma` 与 `prisma/migrations/20260613113709_add_posts/migration.sql` 定义 Post 与 PostStatus；`src/lib/storage.ts` 负责 `UPLOAD_DIR`、路径防穿越、sharp 图片管线、`save`/`saveFromUrl`；`src/modules/posts/*` 封装 slug、TOC、校验、查询、Server Actions 与浏览量去抖；`src/app/(private)/admin/posts/*` 实现管理端列表与编辑；`src/app/(public)/blog/*`、`src/app/rss.xml/route.ts`、`src/app/api/upload/route.ts`、`src/app/uploads/[...path]/route.ts` 实现公开阅读、RSS、上传与文件服务。
+- 关键决定与偏离：新增并锁定 `sharp@0.35.1`；slug 策略为英文/数字标题生成可读 slug，中文标题回退 `post-时间戳`，不新增拼音依赖；JPEG 输出 JPEG，PNG/WebP/GIF 输出 WebP，GIF 转动画 WebP；本地未配置 `UPLOAD_DIR` 时 public 区兼容既有 `public/uploads`，配置后按 `UPLOAD_DIR/public` 与 `UPLOAD_DIR/private` 分区；Stage 3 favicon 只缓存 jpeg/png/webp/gif，ico 不再原样保存，失败则回退首字母图标。
+- Stage 5 验收：通过 - Post 模型、迁移、Prisma Client 生成与数据库状态检查完成；通过 - `src/lib/storage.test.ts` 覆盖 SVG 拒绝、路径防穿越、EXIF 清除、旋正处理与 480px 缩略图；通过 - 编辑器粘贴图片调用 `/api/upload` 并插入 Markdown 图片语法；通过 - 发布、撤回、更新已发布文章和删除已发布文章会 revalidate `/blog`、分页、RSS 与详情页；通过 - 公开详情页草稿不可见，已发布文章静态详情含 TOC、上一篇/下一篇和客户端浏览量上报；通过 - `/rss.xml` 输出最近 20 篇已发布文章；待人工复核 - 无痕窗口直接打开真实博客图片 URL 应返回图片本体而非 302；待人工复核 - 用真实带 GPS/EXIF 手机竖拍照上传后应方向正确、无 EXIF/GPS、存在 480px 缩略图；待人工复核 - 移动端阅读体验、TOC 跳转和发布流程需要在浏览器中点验。
+- 遗留 TODO：Stage 6 部署时需要确认 standalone/容器内 sharp 原生二进制可用，并将 `UPLOAD_DIR` 挂载为持久卷；Stage 14 才实现 private 区专门鉴权下载路由；Stage 16 活动流需要在文章首次发布时接入 `recordActivity()`，公开首页复用最新 3 篇文章。
+- 验证：`npx.cmd vitest run src/lib/storage.test.ts src/modules/posts/posts.test.ts src/modules/links/favicon.test.ts` ✅；`wsl.exe -d Ubuntu-24.04 -- sh -lc "... docker compose -f docker-compose.dev.yml up -d"` ✅；`npx.cmd prisma migrate dev --name add_posts` ✅；`npx.cmd prisma generate` ✅；`npx.cmd prisma migrate status` ✅（首次因 WSL 容器刚唤醒出现短暂 schema engine error，确认端口和容器状态后重跑通过）；`npx.cmd tsc --noEmit` ✅；`npm.cmd run lint` ✅；`npx.cmd vitest run` ✅；`npm.cmd run check` ✅。
 
 ### Stage 4 · 待办模块 —— 2026-06-13 完成
 - 完成内容：新增 `Todo` 数据模型与迁移，替换 `/todos` 占位页为真实待办看板；页面包含今天（含逾期置顶）、收集箱与未来 7 天三块区域；支持快速连续添加、勾选完成/取消、切换优先级、Popover 改日期、删除，以及把逾期项批量顺延到今天。

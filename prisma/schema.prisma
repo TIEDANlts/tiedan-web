@@ -38,3 +38,23 @@ model Todo {
   doneAt    DateTime?
   createdAt DateTime  @default(now())
 }
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model Post {
+  id          String     @id @default(cuid())
+  title       String
+  slug        String     @unique
+  contentMd   String     @db.Text
+  summary     String?
+  category    String?
+  tags        String[]
+  status      PostStatus @default(DRAFT)
+  publishedAt DateTime?
+  views       Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}

@@ -351,6 +351,7 @@ Vitest（单测）+ Playwright（冒烟）。
 | vitest / @playwright/test | vitest 4.1.8 / Playwright 待安装 |                             |
 | react-markdown / remark-gfm / rehype-pretty-code / shiki | 10.1.0 / 4.0.1 / 0.14.3 / 4.2.0 | Stage 2 Markdown 渲染与代码高亮 |
 | @dnd-kit/core / @dnd-kit/sortable / @dnd-kit/utilities | 6.3.1 / 10.0.0 / 3.2.2 | Stage 3 导航管理拖拽排序 |
+| sharp | 0.35.1 | Stage 5 图片旋正、压缩、去 EXIF 与缩略图 |
 
 - 根目录 `.npmrc` 已含 `save-exact=true`；新增任何依赖先在回复中说明用途与版本，并登记到本表。
 - 禁止擅自升级大版本；遇到"教程写法与装的版本对不上"，以装的版本的官方文档为准。

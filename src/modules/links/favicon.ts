@@ -47,7 +47,7 @@ export async function resolveFaviconUrl(targetUrl: string) {
 
 export async function fetchAndCacheFavicon(
   targetUrl: string,
-  save: (url: string, subdir: string) => Promise<string>,
+  save: (url: string, subdir: string) => Promise<{ url: string; thumbUrl: string }>,
 ) {
   let candidates: string[];
 
@@ -59,7 +59,7 @@ export async function fetchAndCacheFavicon(
 
   for (const candidate of candidates) {
     try {
-      return await save(candidate, "favicons");
+      return (await save(candidate, "favicons")).url;
     } catch {
       // Try the next favicon candidate. Favicon fetch failure should not block link creation.
     }

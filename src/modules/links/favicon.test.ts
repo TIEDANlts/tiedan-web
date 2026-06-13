@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { getFaviconCandidatesFromHtml } from "./favicon";
+import { fetchAndCacheFavicon, getFaviconCandidatesFromHtml } from "./favicon";
 
 describe("getFaviconCandidatesFromHtml", () => {
   it("prefers icon link tags and resolves relative hrefs", () => {
@@ -28,5 +28,18 @@ describe("getFaviconCandidatesFromHtml", () => {
     expect(getFaviconCandidatesFromHtml("<html></html>", "https://example.com/a")).toEqual([
       "https://example.com/favicon.ico",
     ]);
+  });
+
+  it("returns the url from the storage save result", async () => {
+    const save = vi.fn(async () => ({ url: "/uploads/favicons/a.webp", thumbUrl: "/uploads/favicons/a-thumb.webp" }));
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("<html></html>", { status: 200 })),
+    );
+
+    await expect(fetchAndCacheFavicon("https://example.com", save)).resolves.toBe("/uploads/favicons/a.webp");
+    expect(save).toHaveBeenCalledWith("https://example.com/favicon.ico", "favicons");
+    vi.unstubAllGlobals();
   });
 });
