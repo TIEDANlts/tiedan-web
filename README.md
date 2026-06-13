@@ -1,29 +1,88 @@
 # 铁蛋的个人网站
 
-单用户个人生活管理网站。当前处于 Stage 0：工程地基初始化。
+单用户个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
+
+当前进度：Stage 1 已完成，Stage 2 待开始。Stage 1 已接入 Auth.js v5 Credentials 登录、默认私密的权限白名单、管理员 seed、健康检查接口和 `/todos` 私密占位页。
+
+## 本地环境
+
+- Node.js / npm：使用仓库锁定版本安装依赖。
+- PostgreSQL：通过 WSL `Ubuntu-24.04` 里的 Docker 启动；Windows PowerShell 中没有 `docker` 命令。
+- 环境变量：复制 `.env.example` 到 `.env`，至少配置：
+  - `DATABASE_URL`
+  - `AUTH_SECRET`
+  - `ADMIN_USERNAME`
+  - `ADMIN_PASSWORD`
+
+`AUTH_SECRET` 应使用随机值，例如：
+
+```powershell
+node -e "console.log(crypto.randomBytes(32).toString('base64'))"
+```
 
 ## 本地启动
 
-1. 启动数据库：
+1. 安装依赖：
 
-```bash
-docker compose -f docker-compose.dev.yml up -d
+```powershell
+npm.cmd install
 ```
 
-如果 Docker 只安装在 WSL 内，请先进入能运行 Docker 的 Ubuntu 发行版，再从本仓库目录执行同一条命令。
+2. 启动 WSL Docker 里的 PostgreSQL：
 
-2. 执行迁移：
-
-```bash
-npx prisma migrate dev
+```powershell
+wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && docker compose -f docker-compose.dev.yml up -d"
 ```
 
-3. 启动开发服务器：
+如果 Windows 侧 Node/Prisma 报 `ECONNREFUSED`，通常是 WSL 发行版退出导致端口转发失效。测试期间保持一个 WSL 会话存活，或临时运行：
 
-```bash
-npm run dev
+```powershell
+wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && docker compose -f docker-compose.dev.yml up -d && sleep 300"
 ```
+
+3. 确认数据库可达：
+
+```powershell
+Test-NetConnection -ComputerName localhost -Port 5432
+npx.cmd prisma migrate status
+```
+
+4. 初始化管理员账号：
+
+```powershell
+npm.cmd run db:seed
+```
+
+5. 启动开发服务器：
+
+```powershell
+npm.cmd run dev
+```
+
+访问 `/login` 后使用 `.env` 中的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 登录。`/todos` 是 Stage 1 用于验证权限保护的临时私密页面。
+
+## 常用命令
+
+```powershell
+npm.cmd run check
+npx.cmd prisma generate
+npx.cmd prisma migrate status
+npm.cmd run db:seed
+```
+
+`npm.cmd run check` 包含 TypeScript 类型检查、ESLint 和 Vitest。
+
+## 当前功能
+
+- 公开路由：`/login`、`/`、`/blog/**`、`/nav`、`/rss.xml`、`/uploads/**`、`/api/auth/**`、`/api/health`、`/api/posts/view`、`/api/quick/**`。
+- 私密路由：除白名单外默认要求登录。
+- 登录：Auth.js v5 Credentials，bcrypt 校验 `User.passwordHash`，JWT session 30 天。
+- Seed：`scripts/seed.ts` 幂等创建 / 更新唯一管理员。
+- 临时私密页：`/todos` 显示“待办（建设中）”。
+- 健康检查：`GET /api/health` 返回 `{ ok: true }`。
 
 ## 约定
 
-主题 token 已在 Stage 0 接入，后续组件不得散写 hex；颜色、圆角和模块色应来自 `src/app/globals.css` 与 `src/lib/design.ts`。
+- 全站文案使用中文；本项目永远只有一个用户，不做注册 / 多租户。
+- 主题 token 已接入，后续组件不得散写 hex；颜色、圆角和模块色应来自 `src/app/globals.css` 与 `src/lib/design.ts`。
+- 每个 Stage 完成后必须更新 `docs/PROGRESS.md` 和本 README，并逐条对照 `docs/PLAN.md` 的验收标准。
