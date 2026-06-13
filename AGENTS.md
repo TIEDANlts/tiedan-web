@@ -10,6 +10,32 @@
 - 远程仓库：`https://github.com/TIEDANlts/tiedan-web.git`
 - 默认主分支：`main`
 - 默认远程名：`origin`
+- 本机 Docker 只安装在 WSL 的 `Ubuntu-24.04` 发行版里，Windows PowerShell 中没有 `docker` 命令。
+- 本地 PostgreSQL 需要通过 WSL Docker 启动；从 PowerShell 执行 Prisma / seed / dev 前，先运行：
+
+```powershell
+wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && docker compose -f docker-compose.dev.yml up -d"
+```
+
+- 如果随后 Windows 侧 Node/Prisma 仍报 `ECONNREFUSED`，通常是 WSL 发行版退出导致 Docker 端口转发短暂失效。测试期间保持一个 WSL 会话存活，例如另开终端运行：
+
+```powershell
+wsl.exe -d Ubuntu-24.04
+```
+
+或临时执行：
+
+```powershell
+wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && docker compose -f docker-compose.dev.yml up -d && sleep 300"
+```
+
+然后再在 PowerShell 中验证：
+
+```powershell
+Test-NetConnection -ComputerName localhost -Port 5432
+npx.cmd prisma migrate status
+npm.cmd run db:seed
+```
 
 如果 remote 缺失，Agent 应配置：
 
@@ -239,6 +265,13 @@ git status --short
 npm run check
 ```
 
+并逐条对照 `docs/PLAN.md` 中当前 Stage 的“验收标准”做验收：
+
+- 每一条都要标记为：通过 / 未通过 / 因环境阻塞未验证。
+- 对未通过或未验证的条目，必须写明原因、阻塞条件和下一步命令或人工验收步骤。
+- 不得只用 `npm run check` 代替 Stage 验收；自动化验证和人工验收清单必须同时汇报。
+- 如果验收发现实现缺口，先修复并重新验证；如果是环境阻塞，必须在最终汇报和 `docs/PROGRESS.md` 中明确记录。
+
 并更新 `docs/PROGRESS.md`：
 
 - 完成内容
@@ -298,8 +331,8 @@ Vitest（单测）+ Playwright（冒烟）。
 | ------------------------- | ------ | --------------------------- |
 | next / react              | next 16.2.9 / react 19.2.4 |                             |
 | tailwindcss               | 4.3.0 | v4，CSS-first，禁止 v3 写法 |
-| next-auth                 | Stage 1 待安装 | beta，必须锁精确版本        |
-| prisma / @prisma/client   | 7.8.0 / 7.8.0 |                             |
+| next-auth                 | 5.0.0-beta.30 | beta，必须锁精确版本        |
+| prisma / @prisma/client / @prisma/adapter-pg   | 7.8.0 / 7.8.0 / 7.8.0 |                             |
 | vitest / @playwright/test | vitest 4.1.8 / Playwright 待安装 |                             |
 
 - 根目录 `.npmrc` 已含 `save-exact=true`；新增任何依赖先在回复中说明用途与版本，并登记到本表。
