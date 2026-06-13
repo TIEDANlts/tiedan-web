@@ -63,6 +63,7 @@
   --radius-2xl: var(--app-radius-pill);
   --radius-3xl: var(--app-radius-pill);
   --radius-4xl: var(--app-radius-pill);
+  --radius-pill: var(--app-radius-pill);
 
   --font-sans: var(--font-ui), var(--font-zh-sans);
   --font-serif: var(--font-public-serif), var(--font-zh-serif);
@@ -106,8 +107,8 @@ html.dark {
   --ink-2: #A8A296;
   --ink-3: #8A847A;
   --border: #2E2A22;
-  --primary: #C25B65;
-  --accent: #C25B65;
+  --primary: #C9636D;
+  --accent: #C9636D;
 }
 
 .theme-private {
@@ -177,4 +178,20 @@ body {
   body {
     @apply bg-bg text-ink;
   }
+}
+
+[data-rehype-pretty-code-figure] code {
+  display: grid;
+  background: transparent;
+  padding: 0;
+}
+
+[data-rehype-pretty-code-figure] [data-line] {
+  min-width: 100%;
+  padding-inline: 0.75rem;
+}
+
+.dark [data-rehype-pretty-code-figure] span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
 }
