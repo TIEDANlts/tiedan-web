@@ -1,13 +1,21 @@
 # 项目进度
 
 ## 当前状态
-- 进行中：Stage 7（待开始）
-- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）
+- 进行中：Stage 8（待开始）
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 7 · 游戏模块（手动管理） —— 2026-06-14 完成
+- 完成内容：新增 `Game`/`GameStatus` 数据模型与迁移，完成 `/games` 私密游戏收藏册页面；支持状态、平台、标签、名称搜索和排序 URL 筛选，支持统计徽章、响应式封面墙、手动添加、封面 URL/上传、详情编辑、Markdown 感想和想玩/库存 → 在玩 → 已通关快捷状态流转。
+- 关键文件：`prisma/schema.prisma` 与 `prisma/migrations/20260614120731_add_games/migration.sql` 定义游戏表；`src/modules/games/*` 封装输入归一化、筛选解析、查询与 Server Actions；`src/app/(private)/games/*` 实现收藏册页面、筛选栏、封面网格和添加/详情 Dialog。
+- 关键决定与偏离：未新增第三方依赖；Stage 7 仅做手动管理，Steam 同步、cron、活动时间线埋点、日历事件和删除游戏留给后续 Stage；非 Steam 远程封面在 Server Action 中优先转存到 public uploads，Steam CDN 封面保留为 Stage 8 兼容例外。
+- Stage 7 验收：通过 - 手动添加表单包含名称、平台、封面、状态、评分、时长、标签和备注；通过 - URL searchParams 覆盖状态/平台/标签/搜索/排序；通过 - 封面墙手机 2 列、桌面 4-5 列；通过 - 状态徽章、统计徽章和占位封面使用游戏模块色；通过 - `npm run check` 全绿。
+- 遗留 TODO：Stage 8 接入 Steam 同步时复用 `Game` 表的 `steamAppId`、`source`、`playtime2w` 和 `lastPlayedAt` 字段，并补充合并规则单测；Stage 16 再接入游戏通关 Activity；如需要删除游戏，后续单独加 ConfirmDialog 与对应 action。
+- 验证：`wsl.exe -d Ubuntu-24.04 -- sh -lc "... docker compose -f docker-compose.dev.yml up -d"` ✅；`npx.cmd prisma migrate dev --name add_games` ✅；`npx.cmd prisma generate` ✅；`npx.cmd prisma migrate status` ✅（5 个迁移，数据库结构最新；曾因 WSL 端口转发短暂失效重启保活后通过）；`npx.cmd vitest run src/modules/games/games.test.ts` ✅（4 条通过）；`npx.cmd tsc --noEmit` ✅；`npm.cmd run lint` ✅；`npm.cmd run check` ✅（12 个测试文件、65 个测试通过）。
 
 ### Stage 6A · 本地生产化准备 —— 2026-06-14 完成
 - 完成内容：按“暂不真实上线”的策略完成生产部署基础：standalone 构建、生产 Dockerfile、`docker-compose.prod.yml`、`Caddyfile`、`.env.production.example`、手动触发的 GitHub Actions 部署门、rclone crypt 备份脚本、`docs/DEPLOY.md` 部署手册和 Playwright 冒烟测试骨架；公开页脚支持配置后展示 ICP/公安备案号。

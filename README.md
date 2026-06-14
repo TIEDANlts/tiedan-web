@@ -2,7 +2,7 @@
 
 单用户个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
 
-当前进度：Stage 6A 已完成本地生产化准备；Stage 0-5 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 6A 已接入 standalone 构建、生产 Docker/Compose/Caddy 模板、手动部署门、备份脚本、Playwright 冒烟测试和部署手册。
+当前进度：Stage 7 已完成游戏模块手动管理；Stage 0-6A 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 7 已接入 `Game` 数据模型、`/games` 游戏收藏册、URL 筛选排序、手动添加与详情编辑；Steam 同步留到 Stage 8。
 
 ## 本地环境
 
@@ -90,6 +90,13 @@ Stage 5 新增图片处理与出站请求依赖：`sharp@0.35.1`、`undici@6.26.
 
 Stage 6A 新增冒烟测试依赖：`@playwright/test@1.60.0`。生产化准备文件包括 `Dockerfile`、`docker-compose.prod.yml`、`Caddyfile`、`.env.production.example`、`.github/workflows/deploy.yml`、`scripts/backup.sh` 和 `docs/DEPLOY.md`。真实服务器、HTTPS、对象存储加密备份、Healthchecks 和自动部署验收留到最终上线阶段。
 
+Stage 7 未新增第三方依赖；新增数据库迁移 `20260614120731_add_games`。本地更新数据库时运行：
+
+```powershell
+npx.cmd prisma migrate dev
+npx.cmd prisma generate
+```
+
 生产 Compose 配置检查（通过 WSL Docker）：
 
 ```powershell
@@ -103,6 +110,8 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 登录：Auth.js v5 Credentials，bcrypt 校验 `User.passwordHash`，JWT session 30 天。
 - Seed：`scripts/seed.ts` 幂等创建 / 更新唯一管理员。
 - 私密布局：桌面端固定侧边栏，移动端汉堡抽屉；菜单包含仪表盘、待办、日历、游戏、书影、旅行、消费、博客管理、导航管理和设置。
+- 游戏：`/games` 是私密游戏收藏册，支持状态 Tab（含计数）、平台筛选、标签多选、名称搜索和最近游玩/评分/名称排序；顶部统计显示总数、已通关数和总时长。
+- 游戏管理：支持手动添加游戏、上传或填写封面、评分、时长、标签和 Markdown 感想；详情 Dialog 可编辑全部手动字段，并提供想玩/库存 → 在玩 → 已通关的快捷状态流转。
 - 公开布局：`/blog`、`/nav`、`/login` 使用 `theme-public` 顶栏和编辑部 token。
 - 导航页：`/nav` 公开展示 Link 数据，按分组渲染链接卡片，支持标题、描述和分组本地搜索；未缓存到 favicon 时使用首字母色块回退。
 - 导航管理：`/admin/links` 支持新增、编辑、删除链接；未填写图标时服务端尝试抓取目标站 favicon 并保存到 `public/uploads/favicons`；同组链接支持拖拽排序并即时保存。

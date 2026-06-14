@@ -19,6 +19,32 @@ model Setting {
   value String
 }
 
+enum GameStatus {
+  WISHLIST
+  BACKLOG
+  PLAYING
+  FINISHED
+  SHELVED
+}
+
+model Game {
+  id           String     @id @default(cuid())
+  source       String
+  steamAppId   Int?       @unique
+  name         String
+  platform     String
+  coverUrl     String?
+  status       GameStatus @default(BACKLOG)
+  rating       Int?
+  playtimeMin  Int        @default(0)
+  playtime2w   Int        @default(0)
+  lastPlayedAt DateTime?
+  reviewMd     String?    @db.Text
+  tags         String[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
 model Link {
   id          String  @id @default(cuid())
   group       String
