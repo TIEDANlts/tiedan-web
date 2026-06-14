@@ -1,11 +1,14 @@
-import { PrivatePlaceholderPage } from "@/components/private-placeholder-page";
+import { MediaLibrary } from "@/app/(private)/media/media-library";
+import { getMediaPageData, type MediaSearchParams } from "@/modules/media/queries";
 
-export default function MediaPage() {
+export const dynamic = "force-dynamic";
+
+export default async function MediaPage({ searchParams }: { searchParams: Promise<MediaSearchParams> }) {
+  const data = await getMediaPageData(await searchParams);
+
   return (
-    <PrivatePlaceholderPage
-      eyebrow="书影"
-      title="书影（建设中）"
-      description="Stage 8 会在这里管理书、电影、剧集和评分记录。"
-    />
+    <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <MediaLibrary data={data} />
+    </main>
   );
 }

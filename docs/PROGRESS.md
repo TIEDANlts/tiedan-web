@@ -1,13 +1,21 @@
 # 项目进度
 
 ## 当前状态
-- 进行中：Stage 9（待开始）
-- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8
+- 进行中：Stage 10（待开始）
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 9 · 书影模块（手动管理） —— 2026-06-14 完成
+- 完成内容：新增 `MediaItem`、`MediaType`、`MediaStatus` 数据模型与迁移，完成 `/media` 私密书影收藏册页面；支持图书 / 电影 / 剧集顶层 Tab、状态计数 Tab、标签筛选、标题搜索、书影模块色统计徽章和响应式封面网格；支持手动添加书影条目、封面 URL/上传、评分、标签、想看/想读上映或出版日期；新增 `/media/[id]` 详情页，可编辑元信息、开始/完成日期、Markdown 感想和剧透开关，剧透感想默认折叠。
+- 关键文件：`prisma/schema.prisma` 与 `prisma/migrations/20260614140757_add_media_items/migration.sql` 定义书影枚举和表；`src/modules/media/utils.ts`、`src/modules/media/actions.ts`、`src/modules/media/queries.ts` 封装输入归一化、筛选解析、状态日期联动、查询与 Server Actions；`src/modules/media/media.test.ts` 覆盖归一化、筛选、文案和日期联动；`src/app/(private)/media/page.tsx`、`src/app/(private)/media/media-library.tsx`、`src/app/(private)/media/[id]/page.tsx` 与 `src/app/(private)/media/[id]/media-detail-editor.tsx` 实现列表、添加 Dialog 和详情编辑。
+- 关键决定与偏离：未新增第三方依赖，复用 `RatingStars`、`TagInput`、`MarkdownEditor`、`MarkdownRenderer`、`StatusBadge` 与 Stage 5 的上传/转存链路；状态联动集中在 action 层，`DOING` 且 `startedAt` 为空自动填今天，`DONE` 且 `finishedAt` 为空自动填今天，详情页仍允许手动修改两个日期；本轮尝试按 AGENTS.md 启动 WSL Docker 时当前 WSL 用户无 Docker socket 权限，但 Windows 侧 `localhost:5432` 已可达，`prisma migrate dev` 已成功生成并应用迁移。
+- Stage 9 验收：通过 - 三种类型分 Tab 管理并写入 URL 参数，图书状态文案使用想读/在读/读过；通过 - 状态切换日期联动在 `src/modules/media/utils.ts` 与 action 层实现，纯逻辑单测覆盖；通过 - 剧透感想在详情页服务端渲染为默认折叠的 `<details>` 并显示“已隐藏剧透，点击展开”；通过 - 评分、标签、搜索筛选组合由查询层和页面控件实现，归一化与筛选解析有单测；通过 - 封面墙、状态徽章和统计数字使用收藏册 token 与书影模块色；通过 - `npm run check` 全绿。
+- 遗留 TODO：Stage 10 接入豆瓣历史导入与联网搜索补全时复用 `MediaItem` 的 `doubanId`、`tmdbId`、`isbn`、`coverUrl`、`releaseDate` 字段，并继续遵守外部封面转存本地；Stage 16 活动流接入时在书影状态首次变为 `DONE` 时按类型记录“读完/看完《x》”。
+- 验证：`npx.cmd vitest run src/modules/media/media.test.ts` 先失败于缺少 `./utils`，实现后 ✅（6 条通过）；`npx.cmd prisma migrate dev --name add_media_items` ✅；`npx.cmd prisma generate` ✅；`npx.cmd tsc --noEmit` ✅；`npm.cmd run check` ✅（15 个测试文件、75 条测试通过）；`npx.cmd prisma migrate status` 未复验成功，原因是本轮后段 `localhost:5432` 端口不可达，尝试按 AGENTS.md 通过 WSL Docker 重启 PostgreSQL 时当前 WSL 用户仍无 `/var/run/docker.sock` 权限，需用户修复 Docker 组/会话或保持数据库容器存活后重跑。
 
 ### Stage 8 · Steam 同步 —— 2026-06-14 完成
 - 完成内容：接入 Steam Web API 游戏库同步，`/games` 页面新增“同步 Steam”按钮和上次同步时间；新增 `/api/cron/steam-sync` Bearer Token 定时同步接口；同步成功写入 `Setting` 的 `steam.lastSyncAt`，cron 按成败 ping `HEALTHCHECKS_STEAM_URL`；合并规则按 `steamAppId` 幂等 upsert，Steam 端消失的游戏保留不删。

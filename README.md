@@ -2,7 +2,7 @@
 
 单用户个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
 
-当前进度：Stage 8 已完成 Steam 同步；Stage 0-7 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 8 已接入 Steam 游戏库同步、`/games` 手动同步按钮、`/api/cron/steam-sync` 定时同步接口、Healthchecks 心跳与合并规则单测。
+当前进度：Stage 9 已完成书影模块手动管理；Stage 0-8 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 9 已接入 `MediaItem` 模型、`/media` 封面墙、添加 Dialog、详情编辑页、剧透折叠感想和状态日期联动。
 
 ## 本地环境
 
@@ -102,6 +102,13 @@ npx.cmd prisma generate
 
 Stage 8 未新增第三方依赖；复用 Stage 5 的 `undici@6.26.0` 与 `src/lib/http.ts`。Steam 同步会读取 `STEAM_API_KEY`、`STEAM_ID` 和 `CRON_SECRET`，成功后写入 `Setting` 的 `steam.lastSyncAt`；Steam CDN 封面按项目约定允许热链，前端加载失败会回退占位块。
 
+Stage 9 未新增第三方依赖；新增数据库迁移 `20260614140757_add_media_items`。本地更新数据库时运行：
+
+```powershell
+npx.cmd prisma migrate dev
+npx.cmd prisma generate
+```
+
 生产 Compose 配置检查（通过 WSL Docker）：
 
 ```powershell
@@ -118,6 +125,9 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 游戏：`/games` 是私密游戏收藏册，支持状态 Tab（含计数）、平台筛选、标签多选、名称搜索和最近游玩/评分/名称排序；顶部统计显示总数、已通关数和总时长。
 - 游戏管理：支持手动添加游戏、上传或填写封面、评分、时长、标签和 Markdown 感想；详情 Dialog 可编辑全部手动字段，并提供想玩/库存 → 在玩 → 已通关的快捷状态流转。
 - Steam 同步：`/games` 顶部可手动同步 Steam 游戏库并显示上次同步时间；同步按 `steamAppId` 合并，只更新名称、封面、总时长、近两周时长和最近游玩时间，不覆盖评分、感想、标签和用户手动状态，唯一自动状态流转是 BACKLOG 且近两周有时长时变为 PLAYING；`GET /api/cron/steam-sync` 使用 `Authorization: Bearer ${CRON_SECRET}` 供宿主机 cron 调用。
+- 书影：`/media` 是私密书影收藏册，支持图书 / 电影 / 剧集顶层 Tab，状态 Tab 含计数，图书自动使用想读 / 在读 / 读过文案；支持标签筛选、标题搜索、书影模块色统计徽章和响应式大封面网格。
+- 书影管理：支持手动添加类型、标题、原名、作者 / 导演、年份、封面 URL 或上传、状态、评分和标签；想看 / 想读状态可填写上映 / 出版日期；详情页 `/media/[id]` 可编辑元信息、开始 / 完成日期、Markdown 感想和剧透开关，剧透感想默认折叠显示“已隐藏剧透，点击展开”。
+- 书影状态联动：Server Action 中切换为在看 / 在读且 `startedAt` 为空时自动填今天；切换为看过 / 读过且 `finishedAt` 为空时自动填今天；两个日期都可在详情页手动修改。
 - 公开布局：`/blog`、`/nav`、`/login` 使用 `theme-public` 顶栏和编辑部 token。
 - 导航页：`/nav` 公开展示 Link 数据，按分组渲染链接卡片，支持标题、描述和分组本地搜索；未缓存到 favicon 时使用首字母色块回退。
 - 导航管理：`/admin/links` 支持新增、编辑、删除链接；未填写图标时服务端尝试抓取目标站 favicon 并保存到 `public/uploads/favicons`；同组链接支持拖拽排序并即时保存。

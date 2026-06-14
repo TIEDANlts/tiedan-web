@@ -45,6 +45,42 @@ model Game {
   updatedAt    DateTime   @updatedAt
 }
 
+enum MediaType {
+  BOOK
+  MOVIE
+  TV
+}
+
+enum MediaStatus {
+  WISHLIST
+  DOING
+  DONE
+  DROPPED
+}
+
+model MediaItem {
+  id            String      @id @default(cuid())
+  type          MediaType
+  title         String
+  originalTitle String?
+  creator       String?
+  year          Int?
+  coverUrl      String?
+  doubanId      String?     @unique
+  tmdbId        String?
+  isbn          String?
+  status        MediaStatus @default(WISHLIST)
+  rating        Int?
+  startedAt     DateTime?   @db.Date
+  finishedAt    DateTime?   @db.Date
+  releaseDate   DateTime?   @db.Date
+  reviewMd      String?     @db.Text
+  hasSpoiler    Boolean     @default(false)
+  tags          String[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
 model Link {
   id          String  @id @default(cuid())
   group       String
