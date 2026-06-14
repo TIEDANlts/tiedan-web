@@ -44,6 +44,9 @@ export function MediaDetailEditor({
   const [creator, setCreator] = useState(item.creator ?? "");
   const [year, setYear] = useState(item.year ? String(item.year) : "");
   const [coverUrl, setCoverUrl] = useState(item.coverUrl ?? "");
+  const [doubanId] = useState(item.doubanId ?? "");
+  const [tmdbId] = useState(item.tmdbId ?? "");
+  const [isbn] = useState(item.isbn ?? "");
   const [status, setStatus] = useState<MediaStatusValue>(item.status);
   const [rating, setRating] = useState<number | null>(item.rating);
   const [startedAt, setStartedAt] = useState(item.startedInput);
@@ -95,6 +98,9 @@ export function MediaDetailEditor({
       <input type="hidden" name="rating" value={rating ?? ""} />
       <input type="hidden" name="tags" value={tags.join(",")} />
       <input type="hidden" name="reviewMd" value={reviewMd} />
+      <input type="hidden" name="doubanId" value={doubanId} />
+      <input type="hidden" name="tmdbId" value={tmdbId} />
+      <input type="hidden" name="isbn" value={isbn} />
 
       <header className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>

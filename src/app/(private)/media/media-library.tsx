@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Clapperboard, Plus, Search, Star, Tv } from "lucide-react";
+import { AlertCircle, BookOpen, Clapperboard, Plus, Search, Star, Tv, Upload } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ComponentType, ReactNode } from "react";
@@ -26,7 +26,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { createMediaItemAction, type MediaActionState } from "@/modules/media/actions";
+import {
+  createMediaItemAction,
+  localizeMediaMetadataCoverAction,
+  searchMediaMetadataAction,
+  type MediaActionState,
+} from "@/modules/media/actions";
+import type { MediaMetadataItem, MediaMetadataResult } from "@/modules/media/metadata";
 import type { MediaListItem, MediaPageData } from "@/modules/media/queries";
 import {
   type MediaFilters,
@@ -242,6 +248,110 @@ function FiltersBar({ data }: { data: MediaPageData }) {
   );
 }
 
+function MetadataSearchPanel({
+  type,
+  onPick,
+}: {
+  type: MediaTypeValue;
+  onPick: (item: MediaMetadataItem) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [result, setResult] = useState<MediaMetadataResult | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function searchOnline() {
+    const keyword = query.trim();
+    if (!keyword) {
+      setMessage("请输入要搜索的标题。");
+      return;
+    }
+
+    setMessage(null);
+    startTransition(async () => {
+      const nextResult = await searchMediaMetadataAction(type, keyword);
+      setResult(nextResult);
+      setMessage(nextResult.message ?? (nextResult.results.length > 0 ? null : "没有找到匹配结果，可以手动填写。"));
+    });
+  }
+
+  function pick(item: MediaMetadataItem) {
+    setMessage(null);
+    startTransition(async () => {
+      const localized = await localizeMediaMetadataCoverAction(item);
+      if (!localized.ok) {
+        setMessage(localized.message);
+        return;
+      }
+
+      onPick(localized.item);
+      setMessage(localized.warning ?? `已从${localized.item.source === "tmdb" ? " TMDB" : " NeoDB"}填入表单。`);
+    });
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-surface-2 p-4">
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-3" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                searchOnline();
+              }
+            }}
+            placeholder={`联网搜索${mediaTypeLabels[type]}`}
+            className="bg-surface pl-9"
+          />
+        </div>
+        <Button type="button" variant="outline" onClick={searchOnline} disabled={isPending}>
+          {isPending ? "搜索中..." : "搜索"}
+        </Button>
+      </div>
+
+      {message ? (
+        <p className="flex items-center gap-2 text-sm text-ink-2">
+          <AlertCircle className="size-4 text-module-media" />
+          {message}
+        </p>
+      ) : null}
+
+      {result?.results.length ? (
+        <div className="grid gap-2">
+          {result.results.slice(0, 5).map((item) => (
+            <button
+              key={`${item.source}-${item.sourceId}`}
+              type="button"
+              onClick={() => pick(item)}
+              className="grid grid-cols-[3rem_minmax(0,1fr)] gap-3 rounded-md border border-border bg-surface p-2 text-left transition hover:border-module-media/50"
+            >
+              <div className="aspect-[2/3] overflow-hidden rounded bg-module-media/15">
+                {item.coverUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.coverUrl} alt={item.title} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-module-media">
+                    {item.title.slice(0, 1)}
+                  </div>
+                )}
+              </div>
+              <span className="min-w-0 py-1">
+                <span className="block truncate text-sm font-medium text-ink">{item.title}</span>
+                <span className="mt-1 block truncate text-xs text-ink-3">
+                  {[item.year, item.creator, item.source === "tmdb" ? "TMDB" : "NeoDB"].filter(Boolean).join(" · ")}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MediaForm({
   action,
   initialType,
@@ -256,9 +366,16 @@ function MediaForm({
   const [state, formAction, pending] = useActionState(action, initialMediaActionState);
   const [type, setType] = useState<MediaTypeValue>(initialType);
   const [title, setTitle] = useState("");
+  const [originalTitle, setOriginalTitle] = useState("");
+  const [creator, setCreator] = useState("");
+  const [year, setYear] = useState("");
   const [coverUrl, setCoverUrl] = useState("");
+  const [doubanId, setDoubanId] = useState("");
+  const [tmdbId, setTmdbId] = useState("");
+  const [isbn, setIsbn] = useState("");
   const [status, setStatus] = useState<MediaStatusValue>("WISHLIST");
   const [rating, setRating] = useState<number | null>(null);
+  const [releaseDate, setReleaseDate] = useState("");
   const [tags, setTags] = useState<string[]>([]);
 
   useEffect(() => {
@@ -272,6 +389,25 @@ function MediaForm({
     <form action={formAction} className="space-y-5">
       <input type="hidden" name="rating" value={rating ?? ""} />
       <input type="hidden" name="tags" value={tags.join(",")} />
+      <input type="hidden" name="doubanId" value={doubanId} />
+      <input type="hidden" name="tmdbId" value={tmdbId} />
+      <input type="hidden" name="isbn" value={isbn} />
+
+      <MetadataSearchPanel
+        type={type}
+        onPick={(item) => {
+          setType(item.type);
+          setTitle(item.title);
+          setOriginalTitle(item.originalTitle ?? "");
+          setCreator(item.creator ?? "");
+          setYear(item.year ? String(item.year) : "");
+          setCoverUrl(item.coverUrl ?? "");
+          setDoubanId(item.doubanId ?? "");
+          setTmdbId(item.tmdbId ?? "");
+          setIsbn(item.isbn ?? "");
+          setReleaseDate(item.releaseDate ?? "");
+        }}
+      />
 
       <div className="grid gap-4 md:grid-cols-2">
         <label className={fieldClass()}>
@@ -299,12 +435,12 @@ function MediaForm({
 
         <label className={fieldClass()}>
           <span>原名</span>
-          <Input name="originalTitle" />
+          <Input name="originalTitle" value={originalTitle} onChange={(event) => setOriginalTitle(event.target.value)} />
         </label>
 
         <label className={fieldClass()}>
           <span>{mediaCreatorLabels[type]}</span>
-          <Input name="creator" list={creatorListId} />
+          <Input name="creator" list={creatorListId} value={creator} onChange={(event) => setCreator(event.target.value)} />
           <datalist id={creatorListId}>
             {type === "BOOK" ? <option value="作者待补" /> : <option value="导演待补" />}
           </datalist>
@@ -312,7 +448,7 @@ function MediaForm({
 
         <label className={fieldClass()}>
           <span>年份</span>
-          <Input name="year" type="number" min="1900" max="2100" />
+          <Input name="year" type="number" min="1900" max="2100" value={year} onChange={(event) => setYear(event.target.value)} />
           <FieldError>{state.errors?.year}</FieldError>
         </label>
 
@@ -337,7 +473,7 @@ function MediaForm({
       {status === "WISHLIST" ? (
         <label className={fieldClass()}>
           <span>{type === "BOOK" ? "出版日期" : "上映日期"}</span>
-          <Input name="releaseDate" type="date" />
+          <Input name="releaseDate" type="date" value={releaseDate} onChange={(event) => setReleaseDate(event.target.value)} />
           <FieldError>{state.errors?.releaseDate}</FieldError>
         </label>
       ) : null}
@@ -389,7 +525,7 @@ function AddMediaDialog({ initialType }: { initialType: MediaTypeValue }) {
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>添加书影条目</DialogTitle>
-          <DialogDescription>手动记录一本书、一部电影或一部剧集。</DialogDescription>
+          <DialogDescription>可以联网搜索补全，也可以直接手动填写。</DialogDescription>
         </DialogHeader>
         <MediaForm action={createMediaItemAction} initialType={initialType} onDone={() => setOpen(false)} />
       </DialogContent>
@@ -463,7 +599,15 @@ export function MediaLibrary({ data }: { data: MediaPageData }) {
             记录想读、在读、读过的书，也记录想看、在看和看过的电影剧集。
           </p>
         </div>
-        <AddMediaDialog initialType={data.filters.type} />
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link href="/media/import">
+              <Upload className="size-4" />
+              导入
+            </Link>
+          </Button>
+          <AddMediaDialog initialType={data.filters.type} />
+        </div>
       </header>
 
       <TypeTabs data={data} />

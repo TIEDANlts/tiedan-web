@@ -33,6 +33,9 @@ export type MediaListItem = {
 };
 
 export type MediaDetailItem = MediaListItem & {
+  doubanId: string | null;
+  tmdbId: string | null;
+  isbn: string | null;
   startedInput: string;
   finishedInput: string;
   releaseInput: string;
@@ -93,6 +96,9 @@ function serializeListItem(item: {
 function serializeDetailItem(item: Prisma.MediaItemGetPayload<Record<string, never>>): MediaDetailItem {
   return {
     ...serializeListItem(item),
+    doubanId: item.doubanId,
+    tmdbId: item.tmdbId,
+    isbn: item.isbn,
     startedInput: dateInputValue(item.startedAt),
     finishedInput: dateInputValue(item.finishedAt),
     releaseInput: dateInputValue(item.releaseDate),

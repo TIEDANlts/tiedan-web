@@ -2,7 +2,7 @@
 
 单用户个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
 
-当前进度：Stage 9 已完成书影模块手动管理；Stage 0-8 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 9 已接入 `MediaItem` 模型、`/media` 封面墙、添加 Dialog、详情编辑页、剧透折叠感想和状态日期联动。
+当前进度：Stage 10 已完成书影导入与搜索补全；Stage 0-9 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 10 已接入 `/media/import` 四步导入向导、豆伴 CSV/XLSX 解析、NeoDB/TMDB 搜索补全和外部封面转存。
 
 ## 本地环境
 
@@ -17,6 +17,7 @@
   - `UPLOAD_DIR`（上传根目录；本地可留空以回退到 `public/uploads`，生产建议挂载 `/data/uploads`）
   - `OUTBOUND_PROXY`（可选；外部图片和后续出海 API 请求代理）
   - `STEAM_API_KEY` / `STEAM_ID`（Stage 8 Steam 游戏库同步）
+  - `TMDB_API_KEY`（Stage 10 电影 / 剧集搜索补全，可选；失败会回退 NeoDB）
   - `CRON_SECRET`（Stage 8 定时同步接口 Bearer token）
   - `HEALTHCHECKS_STEAM_URL`（可选；Stage 8 Steam 同步心跳）
   - `ICP_BEIAN_NO` / `GONGAN_BEIAN_NO`（可选；配置后公开页脚展示备案信息）
@@ -109,6 +110,8 @@ npx.cmd prisma migrate dev
 npx.cmd prisma generate
 ```
 
+Stage 10 新增导入解析依赖：`xlsx@0.18.5`、`iconv-lite@0.7.2`。`/media/import` 支持豆伴 CSV/XLSX 四步导入，CSV 会先尝试 UTF-8，失败后回退 GBK；图书搜索走 NeoDB，电影 / 剧集优先 TMDB，失败时回退 NeoDB。所有导入和搜索补全封面都会在服务端经 `src/lib/storage.ts` 转存到 `/uploads/media/...`，转存失败则留空封面，不保存外链。
+
 生产 Compose 配置检查（通过 WSL Docker）：
 
 ```powershell
@@ -128,6 +131,8 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 书影：`/media` 是私密书影收藏册，支持图书 / 电影 / 剧集顶层 Tab，状态 Tab 含计数，图书自动使用想读 / 在读 / 读过文案；支持标签筛选、标题搜索、书影模块色统计徽章和响应式大封面网格。
 - 书影管理：支持手动添加类型、标题、原名、作者 / 导演、年份、封面 URL 或上传、状态、评分和标签；想看 / 想读状态可填写上映 / 出版日期；详情页 `/media/[id]` 可编辑元信息、开始 / 完成日期、Markdown 感想和剧透开关，剧透感想默认折叠显示“已隐藏剧透，点击展开”。
 - 书影状态联动：Server Action 中切换为在看 / 在读且 `startedAt` 为空时自动填今天；切换为看过 / 读过且 `finishedAt` 为空时自动填今天；两个日期都可在详情页手动修改。
+- 书影导入：`/media/import` 提供上传、列映射、预览和执行四步流程；支持标题 / 评分 / 短评 / 日期 / 链接 / 年份 / 封面列自动预选，按 `doubanId` 或类型 + 标题 + 年份跳过重复，逐行容错并展示成功、跳过、失败原因。
+- 书影搜索补全：添加书影 Dialog 顶部可联网搜索；图书使用 NeoDB，电影 / 剧集优先 TMDB，TMDB 不可用时自动回退 NeoDB 并提示；选中结果后回填标题、原名、作者 / 导演、年份、上映 / 出版日期、外部 ID 和本地化封面。
 - 公开布局：`/blog`、`/nav`、`/login` 使用 `theme-public` 顶栏和编辑部 token。
 - 导航页：`/nav` 公开展示 Link 数据，按分组渲染链接卡片，支持标题、描述和分组本地搜索；未缓存到 favicon 时使用首字母色块回退。
 - 导航管理：`/admin/links` 支持新增、编辑、删除链接；未填写图标时服务端尝试抓取目标站 favicon 并保存到 `public/uploads/favicons`；同组链接支持拖拽排序并即时保存。
