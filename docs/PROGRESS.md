@@ -1,13 +1,21 @@
 # 项目进度
 
 ## 当前状态
-- 进行中：Stage 11（待开始）
-- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9、Stage 10
+- 进行中：Stage 12（待开始）
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9、Stage 10、Stage 11
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 11 · 记账基础 —— 2026-06-15 完成
+- 完成内容：新增 `Transaction`、`ExpenseCategory`、`ImportBatch` 数据模型与迁移，消费分类增加 `direction` 区分支出/收入；`scripts/seed.ts` 幂等创建默认消费分类；新增 `/expenses` 私密流水页，支持月份切换、方向/分类/平台/关键词组合筛选、按日倒序分组、日支出小计、行内改分类和二次确认删除；新增移动端优先的“记一笔” Dialog 与底部悬浮入口；新增 `/admin/expense-categories` 分类 CRUD、TagInput 关键词编辑和拖拽排序。
+- 关键文件：`prisma/schema.prisma` 与 `prisma/migrations/20260614175559_add_expenses/migration.sql` 定义消费数据底座；`src/lib/money.ts` 提供 Decimal 安全金额格式化与求和；`src/modules/expenses/*` 封装默认分类、筛选、日期、金额校验、查询与 Server Actions；`src/app/(private)/expenses/*` 和 `src/app/(private)/admin/expense-categories/*` 实现流水页与分类管理页。
+- 关键决定与偏离：按本轮确认给 `ExpenseCategory` 增加 `direction` 字段，避免仅靠名称或排序区分收入/支出分类；Stage 11 不实现 Stage 12 的导入 UI，但已保留 `ImportBatch` 与 `Transaction.importBatchId` 关系；默认分类 seed 只创建缺失项，不覆盖用户后续编辑；本机 WSL 普通用户仍无 Docker socket 权限，本轮使用 WSL root 启动/保活 PostgreSQL，并在命令进程内把 `DATABASE_URL` 主机临时替换为 `127.0.0.1` 以避开 localhost IPv6/端口转发抖动。
+- Stage 11 验收：通过 - `Transaction`/`ExpenseCategory`/`ImportBatch` 迁移已生成并应用，`prisma migrate status` 显示 7 个迁移且数据库最新；通过 - 默认分类 seed 已执行，含支出 10 类与收入 3 类；通过 - 金额工具和分组逻辑单测覆盖 `0.10 + 0.20 = 0.30`、月份边界、手动记账校验和日小计排除收入/不计收支；通过 - `/expenses` 与 `/admin/expense-categories` 已接入私密路由、Server Action session 校验、分类删除置空交易分类；待人工验收 - 375px 手机宽度下 5 秒记账、月份切换、组合筛选、行内改分类、删除确认、分类 CRUD 与排序需要用户在本地浏览器点验。
+- 遗留 TODO：Stage 12 账单导入时复用 `ImportBatch`、`Transaction` 和 `ExpenseCategory.keywords`，并接入自动分类与规则沉淀；Stage 13 快捷记账 API 可复用 `normalizeManualTransactionInput` 与金额工具；内置浏览器访问 `127.0.0.1:3000` 被企业网络策略阻止，未能在 Codex 内完成浏览器点验。
+- 验证：`npx.cmd prisma migrate dev --name add_expenses` ✅；`npx.cmd prisma generate` ✅；`npm.cmd run db:seed` ✅；`npx.cmd prisma migrate status` ✅；`npx.cmd vitest run src/lib/money.test.ts src/modules/expenses/expenses.test.ts scripts/seed.test.ts` ✅（3 个测试文件、11 条测试通过）；`npx.cmd tsc --noEmit` ✅；`npm.cmd run lint` ✅；`npm.cmd run check` ✅（20 个测试文件、93 条测试通过）。
 
 ### Stage 10 · 书影导入与搜索补全 —— 2026-06-15 完成
 - 完成内容：新增 `/media/import` 私密导入向导，支持 CSV/XLSX 上传、UTF-8/GBK CSV 解码、SheetJS 表格解析、表头自动猜测、手动列映射、默认类型与状态、状态值对应关系、前 20 行预览、重复统计和逐行容错导入；添加书影 Dialog 顶部新增联网搜索，图书走 NeoDB，电影/剧集优先 TMDB 并在失败时回退 NeoDB，选中结果后回填表单字段与外部 ID。

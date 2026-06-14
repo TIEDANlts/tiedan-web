@@ -120,3 +120,55 @@ model Post {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 }
+
+enum TxnDirection {
+  EXPENSE
+  INCOME
+  NEUTRAL
+}
+
+model Transaction {
+  id            String           @id @default(cuid())
+  platform      String
+  txnTime       DateTime
+  amount        Decimal          @db.Decimal(12, 2)
+  direction     TxnDirection
+  categoryId    String?
+  category      ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  merchant      String?
+  item          String?
+  payMethod     String?
+  txnNo         String?
+  note          String?
+  importBatchId String?
+  importBatch   ImportBatch?     @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  raw           Json?
+  createdAt     DateTime         @default(now())
+
+  @@unique([platform, txnNo])
+  @@index([txnTime])
+  @@index([categoryId])
+  @@index([platform])
+  @@index([importBatchId])
+}
+
+model ExpenseCategory {
+  id           String         @id @default(cuid())
+  name         String         @unique
+  direction    TxnDirection   @default(EXPENSE)
+  icon         String?
+  keywords     String[]
+  sort         Int            @default(0)
+  transactions Transaction[]
+}
+
+model ImportBatch {
+  id           String        @id @default(cuid())
+  platform     String
+  filename     String
+  total        Int
+  inserted     Int
+  skipped      Int
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+}

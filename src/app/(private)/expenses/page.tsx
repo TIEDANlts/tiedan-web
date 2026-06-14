@@ -1,11 +1,14 @@
-import { PrivatePlaceholderPage } from "@/components/private-placeholder-page";
+import { ExpensesLedger } from "@/app/(private)/expenses/expenses-ledger";
+import { getExpensePageData, type ExpenseSearchParams } from "@/modules/expenses/queries";
 
-export default function ExpensesPage() {
+export const dynamic = "force-dynamic";
+
+export default async function ExpensesPage({ searchParams }: { searchParams: Promise<ExpenseSearchParams> }) {
+  const data = await getExpensePageData(await searchParams);
+
   return (
-    <PrivatePlaceholderPage
-      eyebrow="消费"
-      title="消费（建设中）"
-      description="Stage 9 会在这里接入账单导入、分类、预算和统计图表。"
-    />
+    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+      <ExpensesLedger data={data} />
+    </main>
   );
 }

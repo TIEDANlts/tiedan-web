@@ -2,7 +2,7 @@
 
 单用户个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
 
-当前进度：Stage 10 已完成书影导入与搜索补全；Stage 0-9 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 10 已接入 `/media/import` 四步导入向导、豆伴 CSV/XLSX 解析、NeoDB/TMDB 搜索补全和外部封面转存。
+当前进度：Stage 11 已完成消费模块基础；Stage 0-10 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 11 已接入消费流水、手动记账、分类管理和默认分类 seed。
 
 ## 本地环境
 
@@ -68,7 +68,7 @@ npm.cmd run db:seed
 npm.cmd run dev
 ```
 
-访问 `/login` 后使用 `.env` 中的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 登录。`/todos` 是真实待办页面，`/admin/posts` 是博客管理入口，未登录访问私密页面会被重定向到登录页。
+访问 `/login` 后使用 `.env` 中的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 登录。`/todos` 是真实待办页面，`/expenses` 是消费流水页，`/admin/expense-categories` 是消费分类管理入口，未登录访问私密页面会被重定向到登录页。
 
 ## 常用命令
 
@@ -112,6 +112,16 @@ npx.cmd prisma generate
 
 Stage 10 新增导入解析依赖：`xlsx@0.18.5`、`iconv-lite@0.7.2`。`/media/import` 支持豆伴 CSV/XLSX 四步导入，CSV 会先尝试 UTF-8，失败后回退 GBK；图书搜索走 NeoDB，电影 / 剧集优先 TMDB，失败时回退 NeoDB。所有导入和搜索补全封面都会在服务端经 `src/lib/storage.ts` 转存到 `/uploads/media/...`，转存失败则留空封面，不保存外链。
 
+Stage 11 未新增第三方依赖；新增数据库迁移 `20260614175559_add_expenses`。本地更新数据库时运行：
+
+```powershell
+npx.cmd prisma migrate dev
+npx.cmd prisma generate
+npm.cmd run db:seed
+```
+
+`db:seed` 会在创建 / 更新唯一管理员后，幂等补齐默认消费分类；已存在的分类不会被覆盖。
+
 生产 Compose 配置检查（通过 WSL Docker）：
 
 ```powershell
@@ -123,8 +133,8 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 公开路由：`/login`、`/`、`/blog/**`、`/nav`、`/rss.xml`、`/uploads/**`、`/api/auth/**`、`/api/health`、`/api/posts/view`、`/api/cron/steam-sync`、`/api/quick/**`。
 - 私密路由：除白名单外默认要求登录；登录后 `/` 显示仪表盘占位页和私密侧边栏。
 - 登录：Auth.js v5 Credentials，bcrypt 校验 `User.passwordHash`，JWT session 30 天。
-- Seed：`scripts/seed.ts` 幂等创建 / 更新唯一管理员。
-- 私密布局：桌面端固定侧边栏，移动端汉堡抽屉；菜单包含仪表盘、待办、日历、游戏、书影、旅行、消费、博客管理、导航管理和设置。
+- Seed：`scripts/seed.ts` 幂等创建 / 更新唯一管理员，并补齐默认消费分类。
+- 私密布局：桌面端固定侧边栏，移动端汉堡抽屉；菜单包含仪表盘、待办、日历、游戏、书影、旅行、消费、消费分类、博客管理、导航管理和设置。
 - 游戏：`/games` 是私密游戏收藏册，支持状态 Tab（含计数）、平台筛选、标签多选、名称搜索和最近游玩/评分/名称排序；顶部统计显示总数、已通关数和总时长。
 - 游戏管理：支持手动添加游戏、上传或填写封面、评分、时长、标签和 Markdown 感想；详情 Dialog 可编辑全部手动字段，并提供想玩/库存 → 在玩 → 已通关的快捷状态流转。
 - Steam 同步：`/games` 顶部可手动同步 Steam 游戏库并显示上次同步时间；同步按 `steamAppId` 合并，只更新名称、封面、总时长、近两周时长和最近游玩时间，不覆盖评分、感想、标签和用户手动状态，唯一自动状态流转是 BACKLOG 且近两周有时长时变为 PLAYING；`GET /api/cron/steam-sync` 使用 `Authorization: Bearer ${CRON_SECRET}` 供宿主机 cron 调用。
@@ -133,6 +143,10 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 书影状态联动：Server Action 中切换为在看 / 在读且 `startedAt` 为空时自动填今天；切换为看过 / 读过且 `finishedAt` 为空时自动填今天；两个日期都可在详情页手动修改。
 - 书影导入：`/media/import` 提供上传、列映射、预览和执行四步流程；支持标题 / 评分 / 短评 / 日期 / 链接 / 年份 / 封面列自动预选，按 `doubanId` 或类型 + 标题 + 年份跳过重复，逐行容错并展示成功、跳过、失败原因。
 - 书影搜索补全：添加书影 Dialog 顶部可联网搜索；图书使用 NeoDB，电影 / 剧集优先 TMDB，TMDB 不可用时自动回退 NeoDB 并提示；选中结果后回填标题、原名、作者 / 导演、年份、上映 / 出版日期、外部 ID 和本地化封面。
+- 消费流水：`/expenses` 是私密消费流水页，支持月份左右切换、方向 / 分类 / 平台 / 关键词组合筛选，按日期倒序分组，日支出小计只统计支出；支出金额使用消费模块色，收入使用绿色模块色，不计收支显示弱色。
+- 手动记账：`/expenses` 顶部和移动端底部提供“记一笔”入口；表单使用大号金额输入、支出 / 收入切换、按方向过滤的分类宫格、默认今天日期、商户和备注字段，手动流水固定写入 `platform=manual`、`txnNo=null`。
+- 消费分类管理：`/admin/expense-categories` 支持新增、编辑、删除和拖拽排序分类，使用 `TagInput` 管理自动分类关键词；删除分类时保留流水并将其 `categoryId` 置空。
+- 金额工具：`src/lib/money.ts` 使用 Prisma Decimal 做金额格式化与求和，禁止浮点数参与合计，Server Component 传给 Client Component 前把 Decimal 转成字符串。
 - 公开布局：`/blog`、`/nav`、`/login` 使用 `theme-public` 顶栏和编辑部 token。
 - 导航页：`/nav` 公开展示 Link 数据，按分组渲染链接卡片，支持标题、描述和分组本地搜索；未缓存到 favicon 时使用首字母色块回退。
 - 导航管理：`/admin/links` 支持新增、编辑、删除链接；未填写图标时服务端尝试抓取目标站 favicon 并保存到 `public/uploads/favicons`；同组链接支持拖拽排序并即时保存。
