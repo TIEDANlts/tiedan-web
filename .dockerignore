@@ -11,4 +11,3 @@ public/uploads
 npm-debug.log*
 Dockerfile
 docker-compose*.yml
-
