@@ -6,6 +6,21 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { formatShanghaiDate } from "@/lib/dayjs";
 import { saveFromUrl } from "@/lib/storage";
+import { executeMediaImportRows } from "@/modules/media/import-executor";
+import {
+  guessMediaImportMapping,
+  normalizeMediaImportRow,
+  parseMediaImportFile,
+  type MediaImportDefaults,
+  type MediaImportMapping,
+  type MediaImportRowData,
+  type ParsedMediaImportFile,
+} from "@/modules/media/import-parser";
+import {
+  searchMediaMetadata,
+  type MediaMetadataItem,
+  type MediaMetadataResult,
+} from "@/modules/media/metadata";
 import {
   applyMediaStatusDates,
   mediaStatusLabel,
@@ -51,6 +66,9 @@ function readMediaInput(formData: FormData) {
     creator: formData.get("creator"),
     year: formData.get("year"),
     coverUrl: formData.get("coverUrl"),
+    doubanId: formData.get("doubanId"),
+    tmdbId: formData.get("tmdbId"),
+    isbn: formData.get("isbn"),
     status: formData.get("status"),
     rating: formData.get("rating"),
     startedAt: formData.get("startedAt"),
@@ -246,4 +264,273 @@ export async function advanceMediaStatusAction(id: string) {
     message: "状态已更新。",
     warning: doneWithoutRatingWarning(item.type as MediaTypeValue, nextStatus, item.rating),
   };
+}
+
+export type MediaImportParseState =
+  | {
+      ok: true;
+      fileName: string;
+      parsed: ParsedMediaImportFile;
+      mapping: MediaImportMapping;
+    }
+  | { ok: false; message: string };
+
+export type MediaImportPayload = {
+  rows: Array<Record<string, string>>;
+  mapping: MediaImportMapping;
+  defaults: MediaImportDefaults;
+};
+
+export type MediaImportPreviewRow = {
+  rowNumber: number;
+  title: string;
+  type: MediaTypeValue;
+  status: MediaStatusValue;
+  rating: number | null;
+  markedAt: string | null;
+  doubanId: string | null;
+  year: number | null;
+  duplicate: boolean;
+  error: string | null;
+};
+
+export type MediaImportPreviewState =
+  | {
+      ok: true;
+      stats: {
+        total: number;
+        valid: number;
+        duplicates: number;
+        invalid: number;
+        willImport: number;
+      };
+      rows: MediaImportPreviewRow[];
+    }
+  | { ok: false; message: string };
+
+export type MediaImportExecuteState =
+  | {
+      ok: true;
+      success: number;
+      skipped: number;
+      failed: number;
+      reasons: Array<{ rowNumber: number; type: "skipped" | "failed" | "warning"; message: string }>;
+    }
+  | { ok: false; message: string };
+
+function normalizeRows(payload: MediaImportPayload) {
+  return payload.rows.map((row, index) => ({
+    rowNumber: index + 1,
+    result: normalizeMediaImportRow(row, payload.mapping, payload.defaults),
+  }));
+}
+
+function weakKey(row: { type: MediaTypeValue; title: string; year: number | null }) {
+  return row.year ? `${row.type}::${row.title.trim().toLowerCase()}::${row.year}` : null;
+}
+
+async function isDuplicateImportRow(
+  row: { type: MediaTypeValue; title: string; year: number | null; doubanId: string | null },
+  seenDoubanIds: Set<string>,
+  seenWeakKeys: Set<string>,
+) {
+  if (row.doubanId) {
+    if (seenDoubanIds.has(row.doubanId)) {
+      return true;
+    }
+
+    const existing = await db.mediaItem.findUnique({
+      where: { doubanId: row.doubanId },
+      select: { id: true },
+    });
+    seenDoubanIds.add(row.doubanId);
+    return Boolean(existing);
+  }
+
+  const key = weakKey(row);
+  if (!key) {
+    return false;
+  }
+
+  if (seenWeakKeys.has(key)) {
+    return true;
+  }
+
+  const existing = await db.mediaItem.findFirst({
+    where: {
+      type: row.type,
+      title: row.title,
+      year: row.year,
+    },
+    select: { id: true },
+  });
+  seenWeakKeys.add(key);
+  return Boolean(existing);
+}
+
+export async function parseMediaImportFileAction(formData: FormData): Promise<MediaImportParseState> {
+  await requireSession();
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, message: "请选择要导入的 CSV 或 XLSX 文件。" };
+  }
+
+  if (!/\.(csv|xlsx|xls)$/i.test(file.name)) {
+    return { ok: false, message: "只支持 CSV 或 XLSX 文件。" };
+  }
+
+  try {
+    const parsed = parseMediaImportFile(Buffer.from(await file.arrayBuffer()), file.name);
+    if (parsed.headers.length === 0) {
+      return { ok: false, message: "没有读到表头，请检查文件内容。" };
+    }
+
+    return {
+      ok: true,
+      fileName: file.name,
+      parsed,
+      mapping: guessMediaImportMapping(parsed.headers),
+    };
+  } catch {
+    return { ok: false, message: "文件解析失败，请确认导出文件没有损坏。" };
+  }
+}
+
+export async function previewMediaImportAction(payload: MediaImportPayload): Promise<MediaImportPreviewState> {
+  await requireSession();
+
+  const normalizedRows = normalizeRows(payload);
+  const seenDoubanIds = new Set<string>();
+  const seenWeakKeys = new Set<string>();
+  const rows: MediaImportPreviewRow[] = [];
+  let valid = 0;
+  let duplicates = 0;
+  let invalid = 0;
+
+  for (const { rowNumber, result } of normalizedRows) {
+    if (!result.ok) {
+      invalid += 1;
+      rows.push({
+        rowNumber,
+        title: "",
+        type: payload.defaults.defaultType,
+        status: payload.defaults.defaultStatus,
+        rating: null,
+        markedAt: null,
+        doubanId: null,
+        year: null,
+        duplicate: false,
+        error: result.errors.join("；"),
+      });
+      continue;
+    }
+
+    valid += 1;
+    const duplicate = await isDuplicateImportRow(result.data, seenDoubanIds, seenWeakKeys);
+    if (duplicate) {
+      duplicates += 1;
+    }
+
+    if (rows.length < 20) {
+      rows.push({
+        rowNumber,
+        title: result.data.title,
+        type: result.data.type,
+        status: result.data.status,
+        rating: result.data.rating,
+        markedAt: result.data.markedAt,
+        doubanId: result.data.doubanId,
+        year: result.data.year,
+        duplicate,
+        error: null,
+      });
+    }
+  }
+
+  return {
+    ok: true,
+    stats: {
+      total: normalizedRows.length,
+      valid,
+      duplicates,
+      invalid,
+      willImport: Math.max(0, valid - duplicates),
+    },
+    rows,
+  };
+}
+
+export async function executeMediaImportAction(payload: MediaImportPayload): Promise<MediaImportExecuteState> {
+  await requireSession();
+
+  const rows: MediaImportRowData[] = normalizeRows(payload).flatMap((row) => (row.result.ok ? [row.result.data] : []));
+
+  const result = await executeMediaImportRows(rows, {
+    async hasDoubanId(doubanId) {
+      return Boolean(await db.mediaItem.findUnique({ where: { doubanId }, select: { id: true } }));
+    },
+    async hasWeakKey(type, title, year) {
+      return Boolean(
+        await db.mediaItem.findFirst({
+          where: { type, title, year },
+          select: { id: true },
+        }),
+      );
+    },
+    async saveCover(coverUrl) {
+      return (await saveFromUrl(coverUrl, "media")).url;
+    },
+    async createItem(data) {
+      await db.mediaItem.create({ data });
+    },
+  });
+
+  revalidateMedia();
+
+  return { ok: true, ...result };
+}
+
+export async function searchMediaMetadataAction(
+  type: MediaTypeValue,
+  query: string,
+): Promise<MediaMetadataResult | { source: "tmdb" | "neodb"; fallbackUsed: boolean; results: []; message: string }> {
+  await requireSession();
+
+  try {
+    return await searchMediaMetadata({ type, query });
+  } catch {
+    return {
+      source: type === "BOOK" ? "neodb" : "tmdb",
+      fallbackUsed: false,
+      results: [],
+      message: "联网搜索暂时不可用，你仍然可以手动填写。",
+    };
+  }
+}
+
+export async function localizeMediaMetadataCoverAction(
+  item: MediaMetadataItem,
+): Promise<{ ok: true; item: MediaMetadataItem; warning?: string } | { ok: false; message: string }> {
+  await requireSession();
+
+  if (!item.coverUrl || item.coverUrl.startsWith("/uploads/")) {
+    return { ok: true, item };
+  }
+
+  try {
+    return {
+      ok: true,
+      item: {
+        ...item,
+        coverUrl: (await saveFromUrl(item.coverUrl, "media")).url,
+      },
+    };
+  } catch {
+    return {
+      ok: true,
+      item: { ...item, coverUrl: null },
+      warning: "封面转存失败，已保留其他字段，你可以稍后上传封面。",
+    };
+  }
 }

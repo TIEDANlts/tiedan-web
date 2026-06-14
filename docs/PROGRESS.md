@@ -1,13 +1,21 @@
 # 项目进度
 
 ## 当前状态
-- 进行中：Stage 10（待开始）
-- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9
+- 进行中：Stage 11（待开始）
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9、Stage 10
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 10 · 书影导入与搜索补全 —— 2026-06-15 完成
+- 完成内容：新增 `/media/import` 私密导入向导，支持 CSV/XLSX 上传、UTF-8/GBK CSV 解码、SheetJS 表格解析、表头自动猜测、手动列映射、默认类型与状态、状态值对应关系、前 20 行预览、重复统计和逐行容错导入；添加书影 Dialog 顶部新增联网搜索，图书走 NeoDB，电影/剧集优先 TMDB 并在失败时回退 NeoDB，选中结果后回填表单字段与外部 ID。
+- 关键文件：`src/modules/media/import-parser.ts`、`src/modules/media/import-executor.ts` 与对应测试覆盖解析、评分换算、doubanId 提取、编码回退、去重和封面失败容错；`src/modules/media/metadata.ts` 封装 NeoDB/TMDB 搜索映射；`src/modules/media/actions.ts` 新增导入与搜索 Server Actions；`src/app/(private)/media/import/*` 与 `src/app/(private)/media/media-library.tsx` 实现导入页和添加 Dialog 搜索补全。
+- 关键决定与偏离：新增并锁定 `xlsx@0.18.5` 与 `iconv-lite@0.7.2`；`tests/fixtures/` 原本不存在，本轮按确认创建最小脱敏豆伴样本，并在测试中用同一内容生成 GBK buffer 覆盖回退分支；未新增 `ImportBatch` 表，按 PLAN 允许的简化方案在导入页展示结果面板；封面下载失败只记录 warning 并置空，不保存外部 URL，也不阻断整行导入。
+- Stage 10 验收：通过 - fixtures 单测覆盖列猜测、5 星评分乘 2、`subject/(\d+)` 提取和 UTF-8/GBK 分支；通过 - `/media/import` 四步流程已实现并在 Server Action 中做 session 校验；通过 - 导入写入按 `doubanId` 与类型 + 标题 + 年份判重，逐行容错并展示成功/跳过/失败原因；通过 - 封面经 `saveFromUrl` 转存，失败置空继续导入；通过 - 添加 Dialog 搜索补全支持 NeoDB/TMDB 与 TMDB 失败回退提示；待人工验收 - 真实豆瓣导出文件导入数量、重复导入全跳过和库内 `coverUrl` 全为 `/uploads` 路径需由用户用真实文件点验。
+- 遗留 TODO：真实豆瓣导出文件体量较大时，当前向导会把解析后的行保存在客户端状态并提交给 Server Action，若后续遇到超大文件再改为临时草稿存储；TMDB 搜索结果列表的作者/导演受 search 接口字段限制，当前 TMDB 结果先回填标题、原名、年份、日期、海报和 `tmdbId`，导演可后续通过详情/credits 接口增强。
+- 验证：`npx.cmd vitest run src/modules/media/media-import.test.ts src/modules/media/media-import-executor.test.ts src/modules/media/media-metadata.test.ts src/modules/media/media.test.ts` ✅（4 个测试文件、16 条测试通过）；`npx.cmd tsc --noEmit` ✅；`npm.cmd run check` ✅（18 个测试文件、85 条测试通过）。
 
 ### Stage 9 · 书影模块（手动管理） —— 2026-06-14 完成
 - 完成内容：新增 `MediaItem`、`MediaType`、`MediaStatus` 数据模型与迁移，完成 `/media` 私密书影收藏册页面；支持图书 / 电影 / 剧集顶层 Tab、状态计数 Tab、标签筛选、标题搜索、书影模块色统计徽章和响应式封面网格；支持手动添加书影条目、封面 URL/上传、评分、标签、想看/想读上映或出版日期；新增 `/media/[id]` 详情页，可编辑元信息、开始/完成日期、Markdown 感想和剧透开关，剧透感想默认折叠。

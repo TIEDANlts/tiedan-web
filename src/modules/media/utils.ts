@@ -68,6 +68,9 @@ export type MediaInput = {
   creator?: FormDataEntryValue | string | null;
   year?: FormDataEntryValue | string | number | null;
   coverUrl?: FormDataEntryValue | string | null;
+  doubanId?: FormDataEntryValue | string | null;
+  tmdbId?: FormDataEntryValue | string | null;
+  isbn?: FormDataEntryValue | string | null;
   status?: FormDataEntryValue | string | null;
   rating?: FormDataEntryValue | string | null;
   startedAt?: FormDataEntryValue | string | null;
@@ -88,6 +91,9 @@ export type NormalizedMediaInput =
         creator: string | null;
         year: number | null;
         coverUrl: string | null;
+        doubanId: string | null;
+        tmdbId: string | null;
+        isbn: string | null;
         status: MediaStatusValue;
         rating: number | null;
         startedAt: Date | null;
@@ -229,6 +235,9 @@ export function normalizeMediaInput(input: MediaInput): NormalizedMediaInput {
   const originalTitle = stringValue(input.originalTitle);
   const creator = stringValue(input.creator);
   const coverUrl = stringValue(input.coverUrl);
+  const doubanId = stringValue(input.doubanId);
+  const tmdbId = stringValue(input.tmdbId);
+  const isbn = stringValue(input.isbn);
   const status = stringValue(input.status) || "WISHLIST";
   const reviewMd = stringValue(input.reviewMd);
   const year = normalizeYear(input.year);
@@ -287,6 +296,9 @@ export function normalizeMediaInput(input: MediaInput): NormalizedMediaInput {
       creator: creator || null,
       year: "value" in year ? year.value : null,
       coverUrl: coverUrl || null,
+      doubanId: doubanId || null,
+      tmdbId: tmdbId || null,
+      isbn: isbn || null,
       status: status as MediaStatusValue,
       rating: "value" in rating ? rating.value : null,
       startedAt: "value" in startedAt ? startedAt.value : null,
