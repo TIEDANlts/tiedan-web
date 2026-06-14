@@ -1,3 +1,5 @@
+import { fetchWithRetry } from "../../lib/http";
+
 const ICON_REL_PATTERN = /<link\b[^>]*>/gi;
 const REL_PATTERN = /\brel\s*=\s*["']([^"']+)["']/i;
 const HREF_PATTERN = /\bhref\s*=\s*["']([^"']+)["']/i;
@@ -30,7 +32,7 @@ export function getFaviconCandidatesFromHtml(html: string, targetUrl: string) {
 }
 
 export async function resolveFaviconUrl(targetUrl: string) {
-  const response = await fetch(targetUrl, {
+  const response = await fetchWithRetry(targetUrl, {
     headers: {
       accept: "text/html,application/xhtml+xml",
     },
@@ -47,7 +49,7 @@ export async function resolveFaviconUrl(targetUrl: string) {
 
 export async function fetchAndCacheFavicon(
   targetUrl: string,
-  save: (url: string, subdir: string) => Promise<string>,
+  save: (url: string, subdir: string) => Promise<{ url: string; thumbUrl: string }>,
 ) {
   let candidates: string[];
 
@@ -59,7 +61,7 @@ export async function fetchAndCacheFavicon(
 
   for (const candidate of candidates) {
     try {
-      return await save(candidate, "favicons");
+      return (await save(candidate, "favicons")).url;
     } catch {
       // Try the next favicon candidate. Favicon fetch failure should not block link creation.
     }

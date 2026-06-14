@@ -1,12 +1,37 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import sharp from "sharp";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { extensionFromContentType, sanitizeStorageSubdir } from "./storage";
+import {
+  assertPublicUploadPath,
+  detectImageType,
+  extensionFromContentType,
+  getUploadRoot,
+  save,
+  sanitizeStorageSubdir,
+  StorageError,
+} from "./storage";
+
+let uploadRoot: string;
+
+beforeEach(async () => {
+  uploadRoot = await mkdtemp(path.join(os.tmpdir(), "tiedan-storage-"));
+  process.env.UPLOAD_DIR = uploadRoot;
+});
+
+afterEach(async () => {
+  delete process.env.UPLOAD_DIR;
+  await rm(uploadRoot, { recursive: true, force: true });
+});
 
 describe("extensionFromContentType", () => {
   it("maps image content types to stable extensions", () => {
     expect(extensionFromContentType("image/png")).toBe("png");
     expect(extensionFromContentType("image/jpeg; charset=binary")).toBe("jpg");
     expect(extensionFromContentType("image/svg+xml")).toBeNull();
+    expect(extensionFromContentType("image/x-icon")).toBeNull();
   });
 });
 
@@ -15,5 +40,67 @@ describe("sanitizeStorageSubdir", () => {
     expect(sanitizeStorageSubdir("favicons")).toBe("favicons");
     expect(sanitizeStorageSubdir("../private")).toBe("private");
     expect(sanitizeStorageSubdir("icons/site logos")).toBe("icons/site-logos");
+  });
+});
+
+describe("detectImageType", () => {
+  it("accepts supported image types and rejects svg with a Chinese error", () => {
+    expect(detectImageType("image/jpeg", "photo.jpg")).toEqual({
+      contentType: "image/jpeg",
+      extension: "jpg",
+      output: "jpeg",
+    });
+    expect(detectImageType("image/png", "photo.png")?.output).toBe("webp");
+    expect(detectImageType("image/gif", "motion.gif")?.animated).toBe(true);
+
+    expect(() => detectImageType("image/svg+xml", "x.svg")).toThrow(StorageError);
+    expect(() => detectImageType("image/svg+xml", "x.svg")).toThrow("不支持上传 SVG 图片");
+  });
+});
+
+describe("assertPublicUploadPath", () => {
+  it("keeps public file serving inside the public upload area", () => {
+    const publicRoot = path.join(getUploadRoot(), "public");
+
+    expect(assertPublicUploadPath(["posts", "a.webp"])).toBe(path.join(publicRoot, "posts", "a.webp"));
+    expect(() => assertPublicUploadPath(["..", "private", "a.webp"])).toThrow("文件路径无效");
+  });
+});
+
+describe("save", () => {
+  it("writes a processed image and a 480px thumbnail", async () => {
+    const input = await sharp({
+      create: {
+        width: 1200,
+        height: 800,
+        channels: 3,
+        background: "#8c2f39",
+      },
+    })
+      .jpeg({ quality: 95 })
+      .withMetadata({ orientation: 6 })
+      .toBuffer();
+
+    const result = await save(input, {
+      area: "public",
+      subdir: "posts/../posts",
+      contentType: "image/jpeg",
+      filename: "手机照片.jpg",
+    });
+
+    expect(result.url).toMatch(/^\/uploads\/posts\/\d+-[a-f0-9-]+\.jpg$/);
+    expect(result.thumbUrl).toMatch(/^\/uploads\/posts\/\d+-[a-f0-9-]+-thumb\.jpg$/);
+
+    const publicRoot = path.join(uploadRoot, "public");
+    const imagePath = path.join(publicRoot, result.url.replace("/uploads/", ""));
+    const thumbPath = path.join(publicRoot, result.thumbUrl.replace("/uploads/", ""));
+    const imageMeta = await sharp(await readFile(imagePath)).metadata();
+    const thumbMeta = await sharp(await readFile(thumbPath)).metadata();
+
+    expect(imageMeta.orientation).toBeUndefined();
+    expect(imageMeta.exif).toBeUndefined();
+    expect(Math.max(imageMeta.width ?? 0, imageMeta.height ?? 0)).toBeLessThanOrEqual(2000);
+    expect(Math.max(thumbMeta.width ?? 0, thumbMeta.height ?? 0)).toBe(480);
+    await expect(stat(thumbPath)).resolves.toBeTruthy();
   });
 });

@@ -6,9 +6,10 @@ type MarkdownEditorProps = {
   value: string;
   onChange: (value: string) => void;
   preview: React.ReactNode;
+  onPasteFiles?: (files: File[]) => Promise<void>;
 };
 
-export function MarkdownEditor({ value, onChange, preview }: MarkdownEditorProps) {
+export function MarkdownEditor({ value, onChange, preview, onPasteFiles }: MarkdownEditorProps) {
   return (
     <Tabs defaultValue="edit" className="gap-3">
       <TabsList>
@@ -19,6 +20,16 @@ export function MarkdownEditor({ value, onChange, preview }: MarkdownEditorProps
         <textarea
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onPaste={(event) => {
+            const files = Array.from(event.clipboardData.files).filter((file) =>
+              file.type.startsWith("image/"),
+            );
+
+            if (files.length > 0 && onPasteFiles) {
+              event.preventDefault();
+              void onPasteFiles(files);
+            }
+          }}
           className="min-h-64 w-full resize-y rounded-lg border border-border bg-surface p-4 text-sm leading-7 text-ink outline-none focus:border-primary focus:ring-3 focus:ring-primary/20"
           placeholder="写点什么，支持 Markdown。"
         />

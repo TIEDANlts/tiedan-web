@@ -8,9 +8,23 @@ import { cn } from "@/lib/utils";
 type MarkdownRendererProps = {
   value: string;
   className?: string;
+  headingIds?: Record<string, string[]>;
 };
 
-export async function MarkdownRenderer({ value, className }: MarkdownRendererProps) {
+function headingText(children: React.ReactNode) {
+  return String(children).replace(/\s+/g, " ").trim();
+}
+
+export async function MarkdownRenderer({ value, className, headingIds = {} }: MarkdownRendererProps) {
+  const headingCounts = new Map<string, number>();
+
+  function idForHeading(text: string) {
+    const count = headingCounts.get(text) ?? 0;
+    headingCounts.set(text, count + 1);
+
+    return headingIds[text]?.[count];
+  }
+
   return (
     <div
       className={cn(
@@ -38,6 +52,16 @@ export async function MarkdownRenderer({ value, className }: MarkdownRendererPro
             }
 
             return <Link href={href}>{children}</Link>;
+          },
+          h2({ children }) {
+            const text = headingText(children);
+
+            return <h2 id={idForHeading(text)}>{children}</h2>;
+          },
+          h3({ children }) {
+            const text = headingText(children);
+
+            return <h3 id={idForHeading(text)}>{children}</h3>;
           },
         }}
       >
