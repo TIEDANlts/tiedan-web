@@ -241,6 +241,19 @@ curl -fsS "${HEALTHCHECKS_BACKUP_URL%/}/fail"
 
 收到失败告警后再 ping 一次成功 URL，使 check 恢复正常。
 
+Steam 同步宿主机 crontab 示例（每天 05:00 调用应用内 cron 接口）：
+
+```cron
+0 5 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" "https://example.com/api/cron/steam-sync" >> /var/log/tiedan-steam-sync.log 2>&1
+```
+
+如果服务器没有把 `.env.production` 自动加载到 crontab 环境，可在命令里改用真实 token，或先在 crontab 顶部声明 `CRON_SECRET=...`。安装后检查：
+
+```bash
+crontab -l
+tail -n 100 /var/log/tiedan-steam-sync.log
+```
+
 ## 9. rclone crypt 备份
 
 对象存储中只能保存加密后的备份。以下是 rclone 配置示例，实际 key 与 endpoint 只放服务器本机：

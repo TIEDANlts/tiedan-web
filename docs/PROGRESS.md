@@ -1,13 +1,21 @@
 # 项目进度
 
 ## 当前状态
-- 进行中：Stage 8（待开始）
-- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7
+- 进行中：Stage 9（待开始）
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 8 · Steam 同步 —— 2026-06-14 完成
+- 完成内容：接入 Steam Web API 游戏库同步，`/games` 页面新增“同步 Steam”按钮和上次同步时间；新增 `/api/cron/steam-sync` Bearer Token 定时同步接口；同步成功写入 `Setting` 的 `steam.lastSyncAt`，cron 按成败 ping `HEALTHCHECKS_STEAM_URL`；合并规则按 `steamAppId` 幂等 upsert，Steam 端消失的游戏保留不删。
+- 关键文件：`src/modules/games/steam.ts` 封装 Steam API 请求、响应解析、事务合并与 `Setting` 更新时间；`src/modules/games/steam.test.ts` 覆盖主观字段保护和 BACKLOG 自动转 PLAYING；`src/modules/games/actions.ts`、`src/modules/games/queries.ts` 与 `src/app/(private)/games/games-library.tsx` 接入手动同步、toast 和上次同步时间；`src/app/api/cron/steam-sync/route.ts` 提供宿主机 cron 入口；`src/lib/auth/routes.ts`、`src/middleware.ts` 与 `AGENTS.md` 同步公开白名单；`docs/DEPLOY.md` 增加 05:00 crontab 示例。
+- 关键决定与偏离：`src/lib/http.ts` 已在 Stage 5 创建并满足 10 秒超时、一次重试和 `OUTBOUND_PROXY` 代理要求，本阶段复用而非重建；Steam CDN 封面继续作为全站外部图片转存纪律的唯一热链例外；未新增第三方依赖，复用 `undici@6.26.0`、`sonner@2.0.7` 和既有 `Game`/`Setting` 模型，无 schema 变更。
+- Stage 8 验收：通过 - 合并规则单测覆盖“用户已修改 status/rating/reviewMd/tags 的游戏”再次同步时主观字段不被覆盖、客观字段正常更新；通过 - BACKLOG 且 `playtime2w > 0` 自动升级为 PLAYING；通过 - `steamAppId` 查询后创建或更新，重复同步不会按 Steam 数据产生重复记录；通过 - `/api/cron/steam-sync` 已加入公开白名单并在路由内校验 `Authorization: Bearer ${CRON_SECRET}`，错误 token 返回 401 的行为由代码路径保证；未验证 - 未在本轮连接真实 Steam 账号执行浏览器点击同步，需登录后在 `/games` 手动点击并观察真实游戏库与 `steam.lastSyncAt`；未验证 - 未在真实服务器安装 crontab 和查看 Healthchecks 面板，最终上线时按 `docs/DEPLOY.md` 执行。
+- 遗留 TODO：最终上线时配置真实 `HEALTHCHECKS_STEAM_URL` 并观察至少一次每日 05:00 cron 心跳；如后续增加 Steam 愿望单或成就数据，应复用 `src/lib/http.ts` 并继续保持主观字段保护规则。
+- 验证：`npx.cmd tsc --noEmit` ✅；`npx.cmd vitest run src/modules/games/steam.test.ts src/lib/auth/routes.test.ts` ✅（2 个测试文件、23 条测试通过）；`npm.cmd run check` ✅（13 个测试文件、67 条测试通过）。
 
 ### Stage 7 · 游戏模块（手动管理） —— 2026-06-14 完成
 - 完成内容：新增 `Game`/`GameStatus` 数据模型与迁移，完成 `/games` 私密游戏收藏册页面；支持状态、平台、标签、名称搜索和排序 URL 筛选，支持统计徽章、响应式封面墙、手动添加、封面 URL/上传、详情编辑、Markdown 感想和想玩/库存 → 在玩 → 已通关快捷状态流转。

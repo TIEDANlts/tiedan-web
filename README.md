@@ -2,7 +2,7 @@
 
 单用户个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
 
-当前进度：Stage 7 已完成游戏模块手动管理；Stage 0-6A 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 7 已接入 `Game` 数据模型、`/games` 游戏收藏册、URL 筛选排序、手动添加与详情编辑；Steam 同步留到 Stage 8。
+当前进度：Stage 8 已完成 Steam 同步；Stage 0-7 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 8 已接入 Steam 游戏库同步、`/games` 手动同步按钮、`/api/cron/steam-sync` 定时同步接口、Healthchecks 心跳与合并规则单测。
 
 ## 本地环境
 
@@ -16,6 +16,9 @@
   - `SITE_URL`（RSS 与公开链接用；本地可用 `http://localhost:3000`）
   - `UPLOAD_DIR`（上传根目录；本地可留空以回退到 `public/uploads`，生产建议挂载 `/data/uploads`）
   - `OUTBOUND_PROXY`（可选；外部图片和后续出海 API 请求代理）
+  - `STEAM_API_KEY` / `STEAM_ID`（Stage 8 Steam 游戏库同步）
+  - `CRON_SECRET`（Stage 8 定时同步接口 Bearer token）
+  - `HEALTHCHECKS_STEAM_URL`（可选；Stage 8 Steam 同步心跳）
   - `ICP_BEIAN_NO` / `GONGAN_BEIAN_NO`（可选；配置后公开页脚展示备案信息）
   - `BASE_URL`（e2e 使用；本地可用 `http://localhost:3000`）
 
@@ -97,6 +100,8 @@ npx.cmd prisma migrate dev
 npx.cmd prisma generate
 ```
 
+Stage 8 未新增第三方依赖；复用 Stage 5 的 `undici@6.26.0` 与 `src/lib/http.ts`。Steam 同步会读取 `STEAM_API_KEY`、`STEAM_ID` 和 `CRON_SECRET`，成功后写入 `Setting` 的 `steam.lastSyncAt`；Steam CDN 封面按项目约定允许热链，前端加载失败会回退占位块。
+
 生产 Compose 配置检查（通过 WSL Docker）：
 
 ```powershell
@@ -105,13 +110,14 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 
 ## 当前功能
 
-- 公开路由：`/login`、`/`、`/blog/**`、`/nav`、`/rss.xml`、`/uploads/**`、`/api/auth/**`、`/api/health`、`/api/posts/view`、`/api/quick/**`。
+- 公开路由：`/login`、`/`、`/blog/**`、`/nav`、`/rss.xml`、`/uploads/**`、`/api/auth/**`、`/api/health`、`/api/posts/view`、`/api/cron/steam-sync`、`/api/quick/**`。
 - 私密路由：除白名单外默认要求登录；登录后 `/` 显示仪表盘占位页和私密侧边栏。
 - 登录：Auth.js v5 Credentials，bcrypt 校验 `User.passwordHash`，JWT session 30 天。
 - Seed：`scripts/seed.ts` 幂等创建 / 更新唯一管理员。
 - 私密布局：桌面端固定侧边栏，移动端汉堡抽屉；菜单包含仪表盘、待办、日历、游戏、书影、旅行、消费、博客管理、导航管理和设置。
 - 游戏：`/games` 是私密游戏收藏册，支持状态 Tab（含计数）、平台筛选、标签多选、名称搜索和最近游玩/评分/名称排序；顶部统计显示总数、已通关数和总时长。
 - 游戏管理：支持手动添加游戏、上传或填写封面、评分、时长、标签和 Markdown 感想；详情 Dialog 可编辑全部手动字段，并提供想玩/库存 → 在玩 → 已通关的快捷状态流转。
+- Steam 同步：`/games` 顶部可手动同步 Steam 游戏库并显示上次同步时间；同步按 `steamAppId` 合并，只更新名称、封面、总时长、近两周时长和最近游玩时间，不覆盖评分、感想、标签和用户手动状态，唯一自动状态流转是 BACKLOG 且近两周有时长时变为 PLAYING；`GET /api/cron/steam-sync` 使用 `Authorization: Bearer ${CRON_SECRET}` 供宿主机 cron 调用。
 - 公开布局：`/blog`、`/nav`、`/login` 使用 `theme-public` 顶栏和编辑部 token。
 - 导航页：`/nav` 公开展示 Link 数据，按分组渲染链接卡片，支持标题、描述和分组本地搜索；未缓存到 favicon 时使用首字母色块回退。
 - 导航管理：`/admin/links` 支持新增、编辑、删除链接；未填写图标时服务端尝试抓取目标站 favicon 并保存到 `public/uploads/favicons`；同组链接支持拖拽排序并即时保存。

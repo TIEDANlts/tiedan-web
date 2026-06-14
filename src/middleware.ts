@@ -11,6 +11,7 @@ import { isPublicPath } from "@/lib/auth/routes";
 // /api/auth/**：Stage 1 Auth.js API。
 // /api/health：Stage 1 部署健康检查。
 // /api/posts/view：Stage 5 文章浏览量上报。
+// /api/cron/steam-sync：Stage 8 Steam 同步 Bearer Token API。
 // /api/quick/**：Stage 13 快捷记账 Bearer Token API。
 // /_next/**：Stage 0 Next.js 静态资源。
 // /favicon.ico 与 public SVG：Stage 0 静态资源。

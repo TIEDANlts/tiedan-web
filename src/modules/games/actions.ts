@@ -10,6 +10,7 @@ import {
   nextGameStatus,
   normalizeGameInput,
 } from "@/modules/games/utils";
+import { syncSteamLibrary } from "@/modules/games/steam";
 
 export type GameActionState = {
   ok: boolean;
@@ -19,6 +20,13 @@ export type GameActionState = {
   errors?: Partial<
     Record<"name" | "platform" | "coverUrl" | "status" | "rating" | "playtimeHours" | "lastPlayedAt" | "form", string>
   >;
+};
+
+export type SteamSyncActionState = {
+  ok: boolean;
+  message: string;
+  added?: number;
+  updated?: number;
 };
 
 async function requireSession() {
@@ -199,4 +207,24 @@ export async function advanceGameStatusAction(id: string) {
     message: "状态已更新。",
     warning: finishedWithoutRatingWarning(nextStatus, game.rating),
   };
+}
+
+export async function syncSteamLibraryAction(): Promise<SteamSyncActionState> {
+  await requireSession();
+
+  try {
+    const result = await syncSteamLibrary();
+    revalidateGames();
+
+    return {
+      ok: true,
+      ...result,
+      message: `Steam 同步完成：新增 ${result.added} 个，更新 ${result.updated} 个。`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Steam 同步失败，请稍后重试。",
+    };
+  }
 }

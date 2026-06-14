@@ -1,10 +1,11 @@
 "use client";
 
-import { Clock3, Gamepad2, ImagePlus, Plus, Search, Star, Trophy } from "lucide-react";
+import { Clock3, Gamepad2, ImagePlus, Plus, RefreshCw, Search, Star, Trophy } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
 import { useActionState, useEffect, useId, useMemo, useState, useTransition } from "react";
+import { toast } from "sonner";
 
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { RatingStars } from "@/components/rating-stars";
@@ -27,7 +28,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { advanceGameStatusAction, createGameAction, updateGameAction, type GameActionState } from "@/modules/games/actions";
+import {
+  advanceGameStatusAction,
+  createGameAction,
+  syncSteamLibraryAction,
+  updateGameAction,
+  type GameActionState,
+} from "@/modules/games/actions";
 import type { GameListItem, GamesPageData } from "@/modules/games/queries";
 import {
   type GameFilters,
@@ -588,6 +595,34 @@ function AddGameDialog() {
   );
 }
 
+function SteamSyncControls({ lastSyncAt }: { lastSyncAt: string | null }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  function syncSteam() {
+    startTransition(async () => {
+      const result = await syncSteamLibraryAction();
+
+      if (result.ok) {
+        toast.success(result.message);
+        router.refresh();
+      } else {
+        toast.error(result.message);
+      }
+    });
+  }
+
+  return (
+    <div className="flex flex-col items-stretch gap-2 sm:items-end">
+      <Button type="button" variant="outline" onClick={syncSteam} disabled={isPending}>
+        <RefreshCw className={cn("size-4", isPending && "animate-spin")} />
+        {isPending ? "正在同步..." : "同步 Steam"}
+      </Button>
+      <p className="text-xs text-ink-3">{lastSyncAt ? `上次同步于 ${lastSyncAt}` : "还没有同步过 Steam"}</p>
+    </div>
+  );
+}
+
 function GameDetailDialog({ game }: { game: GameListItem }) {
   const [open, setOpen] = useState(false);
 
@@ -669,7 +704,12 @@ export function GamesLibrary({ data }: { data: GamesPageData }) {
             记录想玩、在玩和已通关的游戏，封面墙会按当前筛选和排序保存到网址中。
           </p>
         </div>
-        <AddGameDialog />
+        <div className="flex flex-col items-stretch gap-3 sm:items-end">
+          <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
+            <SteamSyncControls lastSyncAt={data.steamLastSyncAt} />
+            <AddGameDialog />
+          </div>
+        </div>
       </header>
 
       <div className="flex flex-wrap gap-3">
