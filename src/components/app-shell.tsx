@@ -176,7 +176,15 @@ export function PrivateShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function PublicShell({ children }: { children: React.ReactNode }) {
+type PublicShellProps = {
+  children: React.ReactNode;
+  icpBeianNo?: string;
+  gonganBeianNo?: string;
+};
+
+export function PublicShell({ children, icpBeianNo, gonganBeianNo }: PublicShellProps) {
+  const hasBeianInfo = Boolean(icpBeianNo || gonganBeianNo);
+
   return (
     <div className="theme-public min-h-screen bg-bg text-ink">
       <header className="border-b border-border bg-bg/90 backdrop-blur">
@@ -201,6 +209,17 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       {children}
+      {hasBeianInfo ? (
+        <footer className="border-t border-border bg-bg">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-5 py-6 text-xs text-ink-3 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+            <span>© TIEDAN</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {icpBeianNo ? <span>{icpBeianNo}</span> : null}
+              {gonganBeianNo ? <span>{gonganBeianNo}</span> : null}
+            </div>
+          </div>
+        </footer>
+      ) : null}
     </div>
   );
 }

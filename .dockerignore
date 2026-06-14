@@ -1,0 +1,13 @@
+.git
+.github
+.next
+.worktrees
+node_modules
+coverage
+public/uploads
+.env
+.env.*
+!.env.production.example
+npm-debug.log*
+Dockerfile
+docker-compose*.yml

@@ -5,14 +5,10 @@ import { ViewBeacon } from "@/app/(public)/blog/[slug]/view-beacon";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { Badge } from "@/components/ui/badge";
 import { formatShanghaiDate } from "@/lib/dayjs";
-import { getPublishedPostBySlug, getPublishedSlugs } from "@/modules/posts/queries";
+import { getPublishedPostBySlug } from "@/modules/posts/queries";
 import { extractToc } from "@/modules/posts/utils";
 
-export const dynamic = "force-static";
-
-export async function generateStaticParams() {
-  return getPublishedSlugs();
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

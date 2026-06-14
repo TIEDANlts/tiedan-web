@@ -1,7 +1,7 @@
 import { getRecentPublishedPosts } from "@/modules/posts/queries";
 import { createExcerpt } from "@/modules/posts/utils";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
 function siteUrl() {
   return (process.env.SITE_URL || "http://localhost:3000").replace(/\/+$/, "");

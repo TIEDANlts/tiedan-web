@@ -73,6 +73,10 @@
 
 :root {
   color-scheme: light;
+  --font-ui: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-public-serif: Georgia, "Times New Roman", serif;
+  --font-private-rounded: ui-rounded, "SF Pro Rounded", "Segoe UI", sans-serif;
+  --font-number: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --font-zh-sans: "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
   --font-zh-serif: "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", serif;
 }

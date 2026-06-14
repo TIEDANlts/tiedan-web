@@ -89,7 +89,7 @@
 6. **活动流**：`Activity` 表 + `recordActivity()` 工具函数，模块在关键动作（通关、看完、发布、完成旅行）时写一条，供首页时间线使用。
 7. **金额纪律**：金额一律 Prisma `Decimal`，禁止 JS 浮点数运算；跨 Server/Client 边界传输前 `.toString()`；展示层统一格式化。
 8. **导入器纪律**：所有外部导入（Steam、豆瓣、账单）遵循「解析 → 预览 → 确认 → 幂等写入（唯一键去重）」四步，重复导入永不产生重复数据。
-9. **缓存纪律**：App Router 的缓存是最常见的翻车点。约定：私密页面一律按动态数据处理；每个写 action 之后对受影响路径 `revalidatePath`；公开博客可静态化，发布/编辑时精确 revalidate。拿不准时宁可动态，先正确再优化。
+9. **缓存纪律**：App Router 的缓存是最常见的翻车点。约定：私密页面一律按动态数据处理；每个写 action 之后对受影响路径 `revalidatePath`；公开博客原则上可静态化，发布/编辑时精确 revalidate。Stage 6A 为保证 Docker/CI 构建不依赖构建期数据库，当前 `/blog`、`/nav`、`/rss.xml` 暂时动态渲染；后续若恢复静态化，必须同时解决构建期数据源或 ISR 策略。拿不准时宁可动态，先正确再优化。
 10. **外部资源纪律**：所有外部图片（豆瓣、TMDB、NeoDB 封面等）服务端下载转存本地后再使用，唯一例外是 Steam CDN（国内可达性历来尚可，热链 + 失败占位）；所有出海 API 统一走 `src/lib/http.ts`（超时、一次重试、可选 `OUTBOUND_PROXY`）。
 11. **测试纪律**：完成的定义 = `npm run check`（类型 + lint + 单测）全绿。账单解析、日期展开、Steam 合并这类纯逻辑必须有 Vitest 单测，且尽量测试先行；CI 质量门不绿不部署。
 
@@ -681,7 +681,7 @@ model Activity {
 - `/api/upload`：登录校验，multipart 接收，调用 storage 保存，返回 `{ url, thumbUrl }`。
 - `GET /uploads/[...path]` 路由：**只回 public 区**文件，带长缓存头，防路径穿越（解析后必须仍在 public 区内）；private 区文件走 Stage 14 的专门路由。中间件白名单在 Stage 1 已放行 `/uploads/**`，本阶段务必回归确认：**无痕窗口（未登录）直接访问一张博客图片 URL 必须返回图片而不是 302**。
 - 管理端 `/admin/posts`：列表（状态筛选/搜索）+ 编辑页。编辑页：标题、slug（自动从标题生成拼音或 `post-时间戳`，可手改）、分类、标签（TagInput）、摘要、MarkdownEditor 正文；支持在编辑器里**粘贴图片直接上传**并插入 Markdown；保存草稿 / 发布 / 撤回 / 删除。
-- **缓存纪律**：公开博客列表页与详情页做静态渲染；发布/撤回/编辑已发布文章后必须 `revalidatePath('/blog')` 与对应详情页路径。
+- **缓存纪律**：公开博客列表页与详情页原则上做静态渲染；发布/撤回/编辑已发布文章后必须 `revalidatePath('/blog')` 与对应详情页路径。Stage 6A 为保证生产镜像构建不依赖构建期数据库，已将当前公开博客、导航与 RSS 暂时调整为动态渲染；恢复静态化前必须先设计构建期数据源或 ISR 策略。
 - 公开端 `/blog`：文章列表（标题、日期、摘要、分类标签），分页或"加载更多"；`/blog/[slug]` 详情页编辑部风格排版：大标题、正文最大宽度约 68ch、目录（TOC，桌面端右侧悬浮）、上一篇/下一篇；草稿不可见（直接 404）。
 - **浏览量**：详情页不在服务端自增（会破坏静态缓存），改为客户端挂载后 `navigator.sendBeacon('/api/posts/view', { slug })` 上报，服务端对该接口做去抖（同 IP 同文章短时间只记一次即可，不必精确）。该接口已在 Stage 1 加入白名单。
 - `/rss.xml`：最近 20 篇已发布文章。
@@ -717,59 +717,71 @@ model Activity {
 ```
 
 ---
-### Stage 6 · 部署上线与备份
+### Stage 6 · 本地生产化准备 + 最终上线待验收
 
-**目标**：网站以 HTTPS 跑在已备案域名上；push 代码先过质量门再自动部署到国内云服务器；每日自动**加密**备份到国内对象存储，且备份与定时任务都有心跳监控。
+**目标**：当前先完成不影响后续 Stage 7-16 本地开发的生产部署基础：可构建的 standalone 镜像、生产 Compose/Caddy 模板、手动部署门、备份脚本、e2e 冒烟测试和部署手册。真实 HTTPS、云服务器、对象存储、Healthchecks、自动上线和恢复演练统一延后到最终上线阶段验证。
 
 **前置准备（手动）**：
 
-- 购买国内云服务器（2GB 内存起步，Ubuntu LTS，装好 Docker 与 Docker Compose 插件），建议同时购买一块可扩容云盘用于 `/data`。
-- 域名与 ICP 备案：按 §0 的建议，备案应该在 Stage 0 当天就已发起，到这一步通常已通过或接近通过。备案通过前不要把正式域名长期解析到国内服务器。
-- 在云厂商控制台配置安全组：公网只放行 80/443；SSH 22 端口限制来源 IP；PostgreSQL 不开放公网端口。
-- 创建国内对象存储 bucket（阿里云 OSS / 腾讯云 COS / 华为云 OBS 等）与最小权限访问密钥，用于备份。
-- 创建国内容器镜像仓库（阿里云 ACR / 腾讯云 TCR / 华为云 SWR 等）。如果暂时不想用 registry，也可以在服务器上 `git pull` 后本地 `docker compose build`，但自动化速度和可回滚性会差一些。
-- 注册 [healthchecks.io](https://healthchecks.io)（或自建实例），创建两个 check：**每日备份**、**Steam 同步**（Stage 8 用），把 ping URL 填入 `HEALTHCHECKS_BACKUP_URL` / `HEALTHCHECKS_STEAM_URL`。定时任务静默失败是个人项目最常见的暗病，心跳监控是治它的唯一便宜药。
-- GitHub 仓库配置 Secrets（SSH 私钥、服务器 IP、registry 地址、registry 用户名/密码、对象存储密钥等）。
+- 现在无需购买或操作云服务器，也不要触发真实部署。
+- 如果最终要部署在中国内地服务器，可以现在并行办理域名实名认证与 ICP 备案。备案不等于上线，备案通过前不要把正式域名长期解析到国内服务器。
+- 真实服务器、安全组、对象存储 bucket、国内容器镜像仓库、Healthchecks 和 GitHub Secrets 留到最终上线阶段配置。
+- 本地 Docker 仍按 AGENTS.md 约定通过 WSL `Ubuntu-24.04` 运行。
 
 **实现要点**
 
-- `Dockerfile`：多阶段构建，`next.config.js` 开 `output: "standalone"`，最终镜像仅含 standalone 产物 + prisma 迁移文件；入口脚本先 `prisma migrate deploy` 再启动。**注意 sharp 含原生二进制**：standalone 输出有时不会带全 sharp 的平台二进制，构建后必须验证镜像内图片处理可用，必要时在运行阶段单独 `npm install sharp`。
-- `docker-compose.prod.yml`：`app`（env_file 注入环境变量，挂载 uploads volume 到 `/data/uploads`，`TZ=Asia/Shanghai`）、`postgres`（数据 volume）、`caddy`（80/443，挂 Caddyfile 与证书 volume，**并把 uploads 卷以只读方式挂给 caddy**）。
-- `Caddyfile`：已备案域名 → 默认 `reverse_proxy app:3000`，自动 HTTPS；**新增**：`handle_path /uploads/*` 直接 `file_server` 服务 uploads 卷的 public 区并配长缓存头——公开图片让 Caddy 直出，不必每张都穿过 Node；私密文件仍走 app 的鉴权路由（Stage 14）。确保安全组和系统防火墙同时放通 80/443。
-- **CI 质量门**：GitHub Actions 拆两个 job——`quality`（`npm ci` + `npm run check`）先跑，绿了才进入 `build & push`（构建镜像推到国内容器镜像服务）→ SSH 到服务器执行 `docker compose pull && docker compose up -d`。如果不用 registry，则改为 SSH 后 `git pull && docker compose build && docker compose up -d`。**质量门挡住的是"AI 改坏了但本地没察觉就 push"这类事故。**
-- 公开页页脚：展示 `ICP_BEIAN_NO`；如已办理公安联网备案，同时展示 `GONGAN_BEIAN_NO`。
-- `scripts/backup.sh`：`pg_dump | gzip` + `tar` 打包 uploads → `rclone copy` 到国内对象存储，**远端必须配置为 rclone `crypt` 加密远端**（个人账单、行程、照片是高敏数据，不能明文躺在对象存储里）；按日期命名，保留最近 30 份（远端清理）；脚本末尾按成败 ping `HEALTHCHECKS_BACKUP_URL`（失败 ping `/fail`）；写入宿主机 crontab 每天 4:00 执行。
-- **Playwright 冒烟测试**：装 Playwright，写 `e2e/smoke.spec.ts` 三条用例——`/api/health` 返回 200、**匿名访问 `/blog` 不被重定向**（白名单回归）、登录后能进 `/todos`。用 `BASE_URL` 环境变量驱动，本地与上线后都能跑；`package.json` 加 `"e2e": "playwright test"`。
-- 上线后立刻演练一次恢复：从加密备份在本地把库 restore 出来确认可用。**没验证过的备份等于没有备份；没验证过解密的加密备份更危险——可能连自己都打不开。**
+- `next.config.ts` 开启 `output: "standalone"`，保留 `/uploads/**` 长缓存头。由于生产镜像需要可靠 `next build`，本 Stage 同步移除 `next/font/google` 构建期网络依赖，改用 CSS 系统字体变量。
+- `Dockerfile`：多阶段构建，最终镜像包含 standalone 产物、静态资源、`public`、`prisma` 与 `prisma.config.ts`；入口脚本先执行 `prisma migrate deploy` 再启动 `server.js`。**注意 sharp 含原生二进制**：runner 阶段必须保留或安装 `sharp@0.35.1` 运行所需文件，并在文档中给出容器内验证命令。
+- `docker-compose.prod.yml`：`app`（env_file 注入环境变量，挂载 uploads volume 到 `/data/uploads`，`TZ=Asia/Shanghai`）、`postgres:16`（数据 volume，仅 Docker 内网访问）、`caddy:2`（80/443，挂 Caddyfile 与证书 volume，并把 uploads 卷以只读方式挂给 caddy）。
+- `Caddyfile`：使用 `{$SITE_DOMAIN}` 占位；最终上线时填已备案域名并自动 HTTPS；`handle_path /uploads/*` 直接 `file_server` 服务 uploads 卷的 public 区并配长缓存头。私密文件仍走 app 的鉴权路由（Stage 14）。
+- **CI 质量门 + 手动部署门**：GitHub Actions 拆两个 job。`quality`（`npm ci` + `npm run check`）在 push / PR 自动运行；`build-and-deploy` 只允许 `workflow_dispatch` 手动触发，构建镜像推到国内容器镜像服务后 SSH 到服务器执行 `docker compose pull && docker compose up -d`。当前阶段不配置真实 secrets 也不会影响后续本地开发。
+- 公开页页脚：展示 `ICP_BEIAN_NO`；如已办理公安联网备案，同时展示 `GONGAN_BEIAN_NO`；未配置时不显示。
+- `scripts/backup.sh`：`pg_dump | gzip` + `tar` 打包 uploads → `rclone copy` 到国内对象存储，远端必须配置为 rclone `crypt` 加密远端；按日期命名，保留最近 30 天；脚本末尾按成败 ping `HEALTHCHECKS_BACKUP_URL`（失败 ping `/fail`）。真实对象存储与 Healthchecks 在最终上线阶段验证。
+- **Playwright 冒烟测试**：装并锁定 `@playwright/test`，写 `e2e/smoke.spec.ts` 三条用例——`/api/health` 返回 200、匿名访问 `/blog` 不被重定向、登录后能进 `/todos`。用 `BASE_URL`、`ADMIN_USERNAME`、`ADMIN_PASSWORD` 环境变量驱动，本地与上线后都能跑；`package.json` 加 `"e2e": "playwright test"`。
+- `docs/DEPLOY.md`：写从零部署手册，覆盖 ICP 备案时间线、服务器初始化、安全组、rclone crypt 配置、Healthchecks 配置、首次部署、域名解析、查看日志、手动回滚、备份恢复演练。真实云资源步骤标记为“最终上线时执行”。
 
 **验收标准**
 
-- [ ] 域名 ICP 备案/接入备案已通过，公开页页脚展示备案号
-- [ ] `https://你的域名` 可访问，HTTP 自动跳 HTTPS
-- [ ] 登录、发文章、传图片、/nav 全部正常；服务器重启后数据与图片仍在
-- [ ] **线上传一张图**确认 sharp 在容器内可用（缩略图生成成功）
-- [ ] 公开图片由 Caddy 直出（响应头无 Next 痕迹 / 看 caddy 日志确认）
-- [ ] 故意提交一个类型错误到分支：CI 的 quality job 红灯并阻断部署；修复后 push main，几分钟后线上自动更新
-- [ ] 对象存储中出现当日备份且**为加密文件（直接下载打不开）**；本地用 rclone crypt 配置恢复演练成功
-- [ ] Healthchecks 面板能看到备份心跳；手动把脚本改错一次，确认收到失败告警后改回
-- [ ] `npm run e2e` 三条冒烟全过（本地与线上各跑一次）
-- [ ] 云服务器安全组仅开放必要端口，PostgreSQL 端口未暴露到公网
+- Stage 6A 本地通过项：
+  - [ ] `next.config.ts` 已开启 standalone，`npm run build` 可通过
+  - [ ] `Dockerfile`、`docker-compose.prod.yml`、`Caddyfile`、`.env.production.example` 可用于本地生产化验证
+  - [ ] `APP_ENV_FILE=.env.production.example docker compose --env-file .env.production.example -f docker-compose.prod.yml config` 可通过
+  - [ ] app 容器内可执行 `prisma migrate deploy`
+  - [ ] app 容器内可验证 `sharp` 可用并能生成图片 buffer
+  - [ ] GitHub Actions 的 `quality` 自动运行，`build-and-deploy` 仅 `workflow_dispatch` 手动触发
+  - [ ] `scripts/backup.sh` 与 `docs/DEPLOY.md` 给出 rclone crypt、crontab、Healthchecks、恢复演练步骤
+  - [ ] 公开布局在配置备案号时显示备案信息，未配置时不显示
+  - [ ] `npm run e2e` 本地冒烟通过
+  - [ ] `npm run check` 全绿
+- 最终上线待验证项：
+  - [ ] 域名 ICP 备案/接入备案已通过，公开页页脚展示备案号
+  - [ ] `https://你的域名` 可访问，HTTP 自动跳 HTTPS
+  - [ ] 登录、发文章、传图片、/nav 全部正常；服务器重启后数据与图片仍在
+  - [ ] 线上传一张图确认 sharp 在容器内可用（缩略图生成成功）
+  - [ ] 公开图片由 Caddy 直出（响应头无 Next 痕迹 / 看 caddy 日志确认）
+  - [ ] 手动触发部署 workflow 能构建、推送镜像并更新服务器
+  - [ ] 对象存储中出现当日备份且为加密文件；本地用 rclone crypt 配置恢复演练成功
+  - [ ] Healthchecks 面板能看到备份心跳；手动把脚本改错一次，确认收到失败告警后改回
+  - [ ] `npm run e2e` 在线上域名全过
+  - [ ] 云服务器安全组仅开放必要端口，PostgreSQL 端口未暴露到公网
 
 **Vibe Coding Prompt**
 
 ```text
-请阅读 AGENTS.md 与 docs/PLAN.md 的 Stage 6，为项目准备生产部署，目标环境是一台已装 Docker 的国内云服务器：
+请阅读 AGENTS.md 与 docs/PLAN.md 的 Stage 6A，为项目完成本地生产化准备。当前不部署上线、不要求真实云资源、不触发真实部署；产物必须不影响后续 Stage 7-16 本地开发：
 
-1. 编写多阶段 Dockerfile：next.config 开启 output standalone；最终镜像包含 standalone 产物、prisma 目录与迁移文件；容器入口脚本先执行 prisma migrate deploy 再启动 node server.js。注意 sharp 的原生二进制在 standalone 模式下可能缺失，请在 Dockerfile 中处理（必要时运行阶段单独安装 sharp），并告诉我如何在容器内验证。
-2. 编写 docker-compose.prod.yml：app（从国内容器镜像仓库拉镜像，env_file 为 .env.production，挂载 uploads 命名卷到 /data/uploads，TZ=Asia/Shanghai）、postgres:16（数据卷，仅 Docker 内网访问）、caddy:2（80/443 端口，挂载 Caddyfile 与 caddy 数据卷，并把 uploads 卷以只读方式挂载进来）。提供 .env.production.example，包含 ICP_BEIAN_NO、GONGAN_BEIAN_NO、BACKUP_REMOTE、HEALTHCHECKS_BACKUP_URL、HEALTHCHECKS_STEAM_URL 等变量。
-3. 编写 Caddyfile：{我的已备案域名} 默认反向代理到 app:3000，自动 HTTPS；增加 handle_path /uploads/* 规则，由 Caddy 直接 file_server 服务 uploads 卷中 public 区的文件并设置长缓存头（私密文件不经此路径，仍由 app 鉴权后返回）。文档里提醒安全组和系统防火墙必须放通 80/443。
-4. 编写 GitHub Actions 工作流，拆成两个 job：quality（checkout、npm ci、npm run check，失败则整个流程终止）→ build-and-deploy（构建镜像推送到国内容器镜像服务，然后通过 SSH（secrets：SSH_KEY、SERVER_HOST、SERVER_USER）在服务器部署目录执行 docker compose pull 和 up -d）；如 registry 信息未配置，文档中给出服务器本地 build 的备选流程。
-5. 编写 scripts/backup.sh：对 postgres 容器执行 pg_dump 并 gzip，打包 uploads 卷，用 rclone copy 上传到对象存储——远端必须是 rclone crypt 加密远端（在 docs/DEPLOY.md 给出 OSS/COS/OBS 任选一种 + crypt 包装的完整 rclone.conf 示例）；文件名含日期，清理远端 30 天前的旧备份；脚本最后根据成败 curl HEALTHCHECKS_BACKUP_URL（失败时 ping 其 /fail 端点）。给出宿主机 crontab 配置行（每天 04:00）。
-6. 在公开布局页脚展示 ICP_BEIAN_NO；如 GONGAN_BEIAN_NO 不为空也展示公安联网备案号。
-7. 安装 Playwright，编写 e2e/smoke.spec.ts 三条冒烟用例：GET /api/health 返回 200；匿名访问 /blog 返回 200 且未被重定向到 /login；使用测试账号登录后能访问 /todos。基础地址从 BASE_URL 环境变量读取，package.json 加 "e2e" 脚本。
-8. 在 docs/DEPLOY.md 写一份从零部署手册：ICP 备案时间线说明、服务器初始化、安全组、rclone crypt 配置、Healthchecks 配置、首次部署、域名解析、查看日志、手动回滚、备份恢复演练的完整步骤。
+1. 移除 `next/font/google` 构建期网络依赖，改用 CSS 系统字体变量；在 `next.config.ts` 开启 `output: "standalone"`，保留 `/uploads/**` 长缓存头。
+2. 编写多阶段 Dockerfile：最终镜像包含 standalone 产物、静态资源、public、prisma 目录与 `prisma.config.ts`；容器入口脚本先执行 `prisma migrate deploy` 再启动 `node server.js`。注意处理 `sharp@0.35.1` 原生二进制，并在 `docs/DEPLOY.md` 告诉我如何在容器内验证。
+3. 编写 `docker-compose.prod.yml`：app（env_file 为 `.env.production`，挂载 uploads 命名卷到 `/data/uploads`，`TZ=Asia/Shanghai`）、postgres:16（数据卷，仅 Docker 内网访问）、caddy:2（80/443，挂载 Caddyfile 与 caddy 数据卷，并把 uploads 卷以只读方式挂载进来）。提供 `.env.production.example`，包含数据库、Auth、备案、备份、Healthchecks 和 registry/deploy 占位变量。
+4. 编写 `Caddyfile`：使用 `{$SITE_DOMAIN}` 占位；最终上线时填已备案域名并自动 HTTPS；增加 `handle_path /uploads/*` 规则，由 Caddy 直接 file_server 服务 uploads 卷中 public 区的文件并设置长缓存头。
+5. 编写 GitHub Actions 工作流：quality（checkout、npm ci、npm run check）在 push/PR 自动运行；build-and-deploy 只允许 `workflow_dispatch` 手动触发，避免当前阶段误上线。文档中给出 registry 缺失时的服务器本地 build 备选流程。
+6. 编写 `scripts/backup.sh`：对 postgres 容器执行 pg_dump 并 gzip，打包 uploads 卷，用 rclone copy 上传到 rclone crypt 远端；文件名含日期，清理远端 30 天前旧备份；脚本最后根据成败 curl `HEALTHCHECKS_BACKUP_URL`。给出宿主机 crontab 配置行（每天 04:00）。
+7. 在公开布局页脚展示 `ICP_BEIAN_NO`；如 `GONGAN_BEIAN_NO` 不为空也展示公安联网备案号；两者都为空时不显示页脚备案区。
+8. 安装并锁定 `@playwright/test`，编写 `e2e/smoke.spec.ts` 三条冒烟用例：GET `/api/health` 返回 200；匿名访问 `/blog` 返回 200 且未被重定向到 `/login`；使用测试账号登录后能访问 `/todos`。基础地址从 `BASE_URL` 环境变量读取，package.json 加 `"e2e"` 脚本。
+9. 在 `docs/DEPLOY.md` 写一份从零部署手册，真实云资源步骤标记为“最终上线时执行”。
+10. 更新 `AGENTS.md` 版本表、`README.md`、`docs/PLAN.md` 和 `docs/PROGRESS.md`，明确 Stage 6A 已完成本地生产化准备，真实上线验收项延后。
 
-先列实施计划确认后执行；完成后运行 npm run check 确认全绿、更新 docs/PROGRESS.md。我会按 DEPLOY.md 实际操作，请确保步骤可照做。
+先列实施计划确认后执行；完成后运行 `npm run check`、`npm run build`、本地可行时运行 `npm run e2e`，并把未能验证的 Docker/线上项记录为环境阻塞或最终上线待验证。
 ```
 
 ---
@@ -817,7 +829,7 @@ model Activity {
 
 **目标**：一键 / 每日自动同步 Steam 游戏库与时长，且**永不覆盖手动填写的主观数据**；同步任务接入心跳监控。
 
-**前置准备（手动）**：在 steamcommunity.com/dev 申请 Web API Key；查到自己的 SteamID64（17 位数字）；Steam 个人资料 → 隐私设置 → **"游戏详情"设为公开**（否则 API 返回空列表）。Healthchecks 的 Steam 同步 check 已在 Stage 6 建好。
+**前置准备（手动）**：在 steamcommunity.com/dev 申请 Web API Key；查到自己的 SteamID64（17 位数字）；Steam 个人资料 → 隐私设置 → **"游戏详情"设为公开**（否则 API 返回空列表）。最终上线时应按 Stage 6A 的 `docs/DEPLOY.md` 建好 Healthchecks 的 Steam 同步 check；本地开发若未配置 `HEALTHCHECKS_STEAM_URL`，同步逻辑允许跳过心跳。
 
 **实现要点**
 
@@ -1253,7 +1265,7 @@ model Activity {
 | 18 | 导航页 favicon 在国内加载失败 | 不用 Google s2；服务端抓取 favicon 后缓存到 public 存储，失败显示首字母色块 |
 | 19 | 字体运行时依赖 Google Fonts，或中文字体全量打包动辄 10MB+ | `next/font` 自托管西文；中文正文走系统字体栈不打包；中文展示字体子集化后再自托管（1.7 节字体策略） |
 | 20 | Prisma Decimal 传给 Client Component 报序列化错误 | 服务端查询结果在边界处 `.toString()`（金额、预算字段都中招） |
-| 21 | 发了新文章 / 改了导航，匿名访客看到的还是旧内容 | 静态页 + 写操作后忘了 revalidate；遵守 AGENTS.md 缓存纪律：私密页动态渲染，公开页写后 `revalidatePath` |
+| 21 | 发了新文章 / 改了导航，匿名访客看到的还是旧内容 | 静态页 + 写操作后忘了 revalidate；遵守 AGENTS.md 缓存纪律：私密页动态渲染，公开页写后 `revalidatePath`。Stage 6A 当前公开博客/导航/RSS 为动态渲染，若恢复静态化必须重新验证 revalidate |
 | 22 | 匿名访客看博客图片全裂，302 到登录页 | 中间件白名单漏了 `/uploads/**`（Stage 1 就要加，Stage 5 回归验证） |
 | 23 | AI 写的配置和装的库版本对不上（Tailwind v3 语法配 v4、next-auth beta 接口变了） | AGENTS.md 版本锁定表 + `.npmrc save-exact`；Tailwind v4 用 `@theme`，禁止 v3 旧写法 |
 | 24 | TMDB API/图片国内连不上，影视搜索整个不可用 | 经 `src/lib/http.ts`（可配 OUTBOUND_PROXY）；失败自动回退 NeoDB；海报一律转存本地 |
@@ -1340,7 +1352,7 @@ Vitest（单测）+ Playwright（冒烟）。
 | tailwindcss | 待回填 | v4，CSS-first，禁止 v3 写法 |
 | next-auth | 待回填 | beta，必须锁精确版本 |
 | prisma / @prisma/client | 待回填 | |
-| vitest / @playwright/test | 待回填 | |
+| vitest / @playwright/test | vitest 4.1.8 / @playwright/test 1.60.0 | Stage 6A 本地/线上冒烟测试 |
 
 - 根目录 `.npmrc` 已含 `save-exact=true`；新增任何依赖先在回复中说明用途与版本，并登记到本表。
 - 禁止擅自升级大版本；遇到"教程写法与装的版本对不上"，以装的版本的官方文档为准。
@@ -1359,7 +1371,7 @@ Vitest（单测）+ Playwright（冒烟）。
 11. 跨模块机制：日历事件实现各模块 getEvents(start, end)；关键动作调 recordActivity()。
 12. 移动端 375px 宽度必须可用，待办与记账页面以移动端优先设计。
 13. 全站使用 docs/PLAN.md 1.7 的设计系统：公开页走编辑部，私密页走收藏册；禁止散写主题色、模块色和圆角。
-14. 缓存纪律：私密页面动态渲染（不缓存）；公开博客/导航等静态化，任何影响公开内容的写操作后必须 revalidatePath 对应路径。
+14. 缓存纪律：私密页面动态渲染（不缓存）；公开博客/导航等原则上静态化，任何影响公开内容的写操作后必须 revalidatePath 对应路径。Stage 6A 为保证 Docker/CI 构建不依赖构建期数据库，当前 `/blog`、`/nav`、`/rss.xml` 暂时使用动态渲染；后续若恢复静态化，必须同时解决构建期数据源或 ISR 策略。
 15. 每个 Stage 的完成定义是 npm run check（tsc + lint + vitest）全绿；格式解析、合并规则、日期边界这类逻辑必须先写或同步写单测。
 16. 每个 Stage 结束更新 docs/PROGRESS.md：完成内容、关键文件、与 PLAN 的偏离、遗留 TODO。
 
