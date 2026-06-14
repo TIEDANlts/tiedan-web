@@ -1,13 +1,21 @@
 # 项目进度
 
 ## 当前状态
-- 进行中：Stage 6（待开始）
-- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5
+- 进行中：Stage 7（待开始）
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 6A · 本地生产化准备 —— 2026-06-14 完成
+- 完成内容：按“暂不真实上线”的策略完成生产部署基础：standalone 构建、生产 Dockerfile、`docker-compose.prod.yml`、`Caddyfile`、`.env.production.example`、手动触发的 GitHub Actions 部署门、rclone crypt 备份脚本、`docs/DEPLOY.md` 部署手册和 Playwright 冒烟测试骨架；公开页脚支持配置后展示 ICP/公安备案号。
+- 关键文件：`Dockerfile` 与 `scripts/docker-entrypoint.sh` 负责容器内 `prisma migrate deploy` 后启动 standalone `server.js`；`docker-compose.prod.yml` 编排 app/postgres/caddy 与持久 uploads/postgres/caddy volumes；`Caddyfile` 预留 `{$SITE_DOMAIN}` 并直出 `/uploads/**` public 文件；`.github/workflows/deploy.yml` 自动跑 quality、手动触发 build-and-deploy；`scripts/backup.sh` 打包数据库与 uploads 并上传 rclone crypt 远端；`playwright.config.ts` 与 `e2e/smoke.spec.ts` 定义冒烟测试。
+- 关键决定与偏离：新增并锁定 `@playwright/test@1.60.0`；移除 `next/font/google` 构建期网络依赖，改用 CSS 系统字体变量；为保证 `npm run build` 与 Docker/CI 构建不依赖构建期数据库，当前 `/blog`、`/blog/[slug]`、`/blog/page/[page]`、`/nav` 与 `/rss.xml` 暂时改为动态渲染，后续如恢复静态化需先设计构建期数据源或 ISR 策略；Docker builder 阶段使用占位 `DATABASE_URL` 仅供 `prisma generate` 读取配置，运行时仍由 `.env.production` 注入真实连接串。
+- Stage 6A 验收：通过 - `npm run check` 全绿；通过 - `npm run build` 可生成 standalone 输出，仍有 Next 16 对 `middleware` 命名的弃用警告与 Turbopack NFT tracing 非阻塞警告；通过 - `docker compose --env-file .env.production.example -f docker-compose.prod.yml config` 可解析（本地验证使用 `APP_ENV_FILE=.env.production.example` 覆盖）；通过 - app 镜像可构建；通过 - 容器内 `sharp@0.35.1` 可加载并生成 WebP buffer；通过 - app 镜像内 `prisma migrate deploy` 可对 compose PostgreSQL 应用 4 个迁移；通过 - `npm run e2e` 三条 Playwright 冒烟用例全过；最终上线待验证 - 真实 HTTPS、Caddy 线上直出、对象存储加密备份、Healthchecks、服务器安全组、手动部署 workflow。
+- 遗留 TODO：最终上线阶段配置真实 `.env.production`、registry secrets、服务器安全组、rclone crypt 和 Healthchecks，并在线上域名重跑完整 e2e；后续 Stage 8 本地开发若未配置 `HEALTHCHECKS_STEAM_URL`，Steam 同步心跳可跳过，最终上线统一补验；后续若恢复公开博客/导航静态化，需要重新验证发布/撤回后的 revalidate 行为。
+- 验证：`npm.cmd run check` ✅（11 个测试文件、61 个测试通过）；`npm.cmd run build` ✅（有非阻塞 warning）；`wsl.exe ... docker compose --env-file .env.production.example -f docker-compose.prod.yml config` ✅；`wsl.exe ... docker compose --env-file .env.production.example -f docker-compose.prod.yml build app` ✅；容器内 `node -e "console.log(require('sharp').versions.sharp)"` ✅（0.35.1）；容器内 sharp 生成 WebP buffer ✅（44 bytes）；容器内 `./node_modules/.bin/prisma migrate deploy` ✅；`npx.cmd playwright install chromium` ✅；`npm.cmd run e2e` ✅（3 条通过；普通沙箱下浏览器启动曾因 `spawn EPERM` 失败，提升权限后验证通过）。
 
 ### Stage 5 · 博客模块 + 文件存储 —— 2026-06-14 完成
 - 完成内容：新增 `Post` 数据模型与迁移，接入 `/admin/posts` 博客管理、公开 `/blog` 列表与详情、`/rss.xml`、`/api/posts/view` 浏览量上报；扩展 `src/lib/storage.ts` 为 public/private 两区存储模块，`POST /api/upload` 仅登录上传，`GET /uploads/**` 只服务 public 区并带长缓存头。

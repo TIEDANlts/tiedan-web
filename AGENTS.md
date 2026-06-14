@@ -348,7 +348,7 @@ Vitest（单测）+ Playwright（冒烟）。
 | tailwindcss               | 4.3.0 | v4，CSS-first，禁止 v3 写法 |
 | next-auth                 | 5.0.0-beta.30 | beta，必须锁精确版本        |
 | prisma / @prisma/client / @prisma/adapter-pg   | 7.8.0 / 7.8.0 / 7.8.0 |                             |
-| vitest / @playwright/test | vitest 4.1.8 / Playwright 待安装 |                             |
+| vitest / @playwright/test | vitest 4.1.8 / @playwright/test 1.60.0 | Stage 6A 本地/线上冒烟测试 |
 | react-markdown / remark-gfm / rehype-pretty-code / shiki | 10.1.0 / 4.0.1 / 0.14.3 / 4.2.0 | Stage 2 Markdown 渲染与代码高亮 |
 | @dnd-kit/core / @dnd-kit/sortable / @dnd-kit/utilities | 6.3.1 / 10.0.0 / 3.2.2 | Stage 3 导航管理拖拽排序 |
 | sharp | 0.35.1 | Stage 5 图片旋正、压缩、去 EXIF 与缩略图 |
@@ -371,7 +371,7 @@ Vitest（单测）+ Playwright（冒烟）。
 11. 跨模块机制：日历事件实现各模块 getEvents(start, end)；关键动作调 recordActivity()。
 12. 移动端 375px 宽度必须可用，待办与记账页面以移动端优先设计。
 13. 全站使用 docs/PLAN.md 1.7 的设计系统：公开页走编辑部，私密页走收藏册；禁止散写主题色、模块色和圆角。
-14. 缓存纪律：私密页面动态渲染（不缓存）；公开博客/导航等静态化，任何影响公开内容的写操作后必须 revalidatePath 对应路径。
+14. 缓存纪律：私密页面动态渲染（不缓存）；公开博客/导航等原则上静态化，任何影响公开内容的写操作后必须 revalidatePath 对应路径。Stage 6A 为保证 Docker/CI 构建不依赖构建期数据库，当前 `/blog`、`/nav`、`/rss.xml` 暂时使用动态渲染；后续若恢复静态化，必须同时解决构建期数据源或 ISR 策略。
 15. 每个 Stage 的完成定义是 npm run check（tsc + lint + vitest）全绿；格式解析、合并规则、日期边界这类逻辑必须先写或同步写单测。
 16. 每个 Stage 结束更新 docs/PROGRESS.md：完成内容、关键文件、与 PLAN 的偏离、遗留 TODO。
 

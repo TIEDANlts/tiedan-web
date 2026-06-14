@@ -90,7 +90,11 @@ export function sanitizeStorageSubdir(subdir: string) {
 }
 
 export function getUploadRoot() {
-  return path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), "public", "uploads"));
+  if (process.env.UPLOAD_DIR) {
+    return path.resolve(/*turbopackIgnore: true*/ process.env.UPLOAD_DIR);
+  }
+
+  return path.resolve(path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads"));
 }
 
 function getAreaRoot(area: StorageArea) {

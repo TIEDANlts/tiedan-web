@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "check": "tsc --noEmit && npm run lint && vitest run",
+    "e2e": "playwright test",
     "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
@@ -43,6 +44,7 @@
     "undici": "6.26.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.60.0",
     "@tailwindcss/postcss": "4.3.0",
     "@types/bcrypt": "6.0.0",
     "@types/node": "20.19.43",

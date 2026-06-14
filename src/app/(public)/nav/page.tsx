@@ -1,6 +1,8 @@
 import { NavBrowser } from "@/app/(public)/nav/nav-browser";
 import { getGroupedLinks } from "@/modules/links/queries";
 
+export const dynamic = "force-dynamic";
+
 export default async function NavPage() {
   const groups = await getGroupedLinks();
 
