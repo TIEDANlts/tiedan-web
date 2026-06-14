@@ -24,7 +24,20 @@ import * as React from "react";
 
 import { logoutAction } from "@/app/(private)/actions";
 import { Button } from "@/components/ui/button";
+import { isThemeOptionActive } from "@/components/app-shell-utils";
 import { cn } from "@/lib/utils";
+
+function subscribeToMountedStore() {
+  return () => {};
+}
+
+function clientMountedSnapshot() {
+  return true;
+}
+
+function serverMountedSnapshot() {
+  return false;
+}
 
 const navItems = [
   { href: "/", label: "仪表盘", icon: Home },
@@ -49,6 +62,7 @@ function isActivePath(pathname: string, href: string) {
 
 function ThemeSwitch() {
   const { setTheme, theme } = useTheme();
+  const mounted = React.useSyncExternalStore(subscribeToMountedStore, clientMountedSnapshot, serverMountedSnapshot);
   const options = [
     { value: "light", label: "亮色", icon: Sun },
     { value: "dark", label: "暗色", icon: Moon },
@@ -59,7 +73,7 @@ function ThemeSwitch() {
     <div className="grid grid-cols-3 gap-1 rounded-pill border border-border bg-surface-2 p-1">
       {options.map((option) => {
         const Icon = option.icon;
-        const active = theme === option.value;
+        const active = isThemeOptionActive(mounted, theme, option.value);
 
         return (
           <button
