@@ -9,6 +9,7 @@ import {
   gameStatuses,
   parseGameFilters,
 } from "@/modules/games/utils";
+import { STEAM_LAST_SYNC_SETTING_KEY } from "@/modules/games/steam";
 
 export type GameSearchParams = Record<string, string | string[] | undefined>;
 
@@ -34,6 +35,7 @@ export type GameListItem = {
 export type GamesPageData = {
   filters: GameFilters;
   games: GameListItem[];
+  steamLastSyncAt: string | null;
   statusCounts: Record<"ALL" | GameStatusValue, number>;
   platforms: string[];
   tags: string[];
@@ -46,6 +48,15 @@ export type GamesPageData = {
 
 function dateTimeInputValue(date: Date | null) {
   return date ? toShanghaiTime(date).format("YYYY-MM-DDTHH:mm") : "";
+}
+
+function settingDateTime(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : formatShanghaiDateTime(date);
 }
 
 function serializeGame(game: {
@@ -129,7 +140,7 @@ export async function getGamesPageData(searchParams: GameSearchParams): Promise<
   const listWhere = buildWhere(filters, { includeStatus: true });
   const baseWhere = buildWhere(filters, { includeStatus: false });
 
-  const [games, groupedStatusCounts, total, finished, playtime, platformRows, tagRows] = await Promise.all([
+  const [games, groupedStatusCounts, total, finished, playtime, platformRows, tagRows, steamLastSyncSetting] = await Promise.all([
     db.game.findMany({
       where: listWhere,
       orderBy: gameOrderBy(filters.sort),
@@ -155,6 +166,10 @@ export async function getGamesPageData(searchParams: GameSearchParams): Promise<
       where: buildWhere({ ...filters, tags: [] }, { includeStatus: false }),
       select: { tags: true },
     }),
+    db.setting.findUnique({
+      where: { key: STEAM_LAST_SYNC_SETTING_KEY },
+      select: { value: true },
+    }),
   ]);
 
   const statusCounts = Object.fromEntries(gameStatuses.map((status) => [status, 0])) as Record<GameStatusValue, number>;
@@ -167,6 +182,7 @@ export async function getGamesPageData(searchParams: GameSearchParams): Promise<
   return {
     filters,
     games: games.map(serializeGame),
+    steamLastSyncAt: settingDateTime(steamLastSyncSetting?.value),
     statusCounts: {
       ALL: total,
       ...statusCounts,

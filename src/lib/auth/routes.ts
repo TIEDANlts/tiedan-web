@@ -15,6 +15,7 @@ export const publicRoutes: PublicRoute[] = [
   { prefix: "/api/auth/", description: "Stage 1：Auth.js API" },
   { exact: "/api/health", description: "Stage 1：部署健康检查" },
   { exact: "/api/posts/view", description: "Stage 5：文章浏览量上报" },
+  { exact: "/api/cron/steam-sync", description: "Stage 8：Steam 同步 Bearer Token API" },
   { prefix: "/api/quick/", description: "Stage 13：快捷记账 Bearer Token API" },
   { prefix: "/_next/", description: "Stage 0：Next.js 静态资源" },
   { exact: "/favicon.ico", description: "Stage 0：站点图标" },

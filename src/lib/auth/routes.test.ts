@@ -14,6 +14,7 @@ describe("isPublicPath", () => {
     "/api/auth/session",
     "/api/health",
     "/api/posts/view",
+    "/api/cron/steam-sync",
     "/api/quick/expense",
     "/_next/static/app.js",
     "/favicon.ico",
