@@ -5,6 +5,7 @@ import {
   createExcerpt,
   extractToc,
   normalizePostInput,
+  parseBlogPageParam,
   postStatusLabel,
   slugFromTitle,
 } from "./utils";
@@ -94,5 +95,19 @@ describe("view debounce helpers", () => {
   it("maps post status labels to Chinese", () => {
     expect(postStatusLabel("DRAFT")).toBe("草稿");
     expect(postStatusLabel("PUBLISHED")).toBe("已发布");
+  });
+});
+
+describe("parseBlogPageParam", () => {
+  it("accepts positive integer page params", () => {
+    expect(parseBlogPageParam("1")).toBe(1);
+    expect(parseBlogPageParam("12")).toBe(12);
+  });
+
+  it("rejects invalid or non-positive page params", () => {
+    expect(parseBlogPageParam("foo")).toBeNull();
+    expect(parseBlogPageParam("1.5")).toBeNull();
+    expect(parseBlogPageParam("0")).toBeNull();
+    expect(parseBlogPageParam("-1")).toBeNull();
   });
 });

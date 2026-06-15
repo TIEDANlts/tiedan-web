@@ -40,13 +40,17 @@ function startOfShanghaiDay(date: string) {
   return dayjs.tz(`${date}T00:00:00`, SHANGHAI_TIMEZONE).toDate();
 }
 
+function dateOnlyToDb(date: string) {
+  return new Date(`${date}T00:00:00.000Z`);
+}
+
 export async function getDashboardTodos() {
   const today = getShanghaiTodayDate();
   const rows = await db.todo.findMany({
     where: {
       done: false,
       date: {
-        lte: startOfShanghaiDay(today),
+        lte: dateOnlyToDb(today),
       },
     },
     orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
@@ -202,10 +206,11 @@ export async function getDashboardSpecialDays() {
 export async function getDashboardYearNumbers() {
   const range = yearRange();
   const [gamesFinished, booksDone, moviesDone, tvDone, posts] = await Promise.all([
-    db.game.count({
+    db.activity.count({
       where: {
-        status: "FINISHED",
-        updatedAt: { gte: range.start, lt: range.end },
+        module: "games",
+        action: "finished",
+        happenedAt: { gte: range.start, lt: range.end },
       },
     }),
     db.mediaItem.count({

@@ -168,6 +168,15 @@ export function buildViewKey(ip: string, slug: string) {
   return `${ip}:${slug}`;
 }
 
+export function parseBlogPageParam(page: string) {
+  if (!/^[1-9]\d*$/.test(page)) {
+    return null;
+  }
+
+  const parsed = Number(page);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
 export function postStatusLabel(status: PostStatusValue) {
   return status === "PUBLISHED" ? "已发布" : "草稿";
 }

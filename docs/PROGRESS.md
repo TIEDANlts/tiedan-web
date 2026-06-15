@@ -9,6 +9,13 @@
 
 ## 修复日志
 
+### 2026-06-15 · 博客分页与首页统计修复
+- 完成内容：修复公开博客分页非法参数会把 `NaN` 传入 Prisma 的问题，非法 `/blog/page/*` 现在会进入 404；修复首页今日待办查询与 `Todo.date @db.Date` 写入哨兵值不一致导致今天待办被漏掉的问题；首页“今年通关”改为按 Activity 中 `games/finished` 的发生时间统计，避免后续编辑游戏资料污染年度通关数。
+- 关键文件：`src/app/(public)/blog/page/[page]/page.tsx`、`src/modules/posts/utils.ts`、`src/modules/posts/queries.ts`、`src/modules/dashboard/queries.ts`、`src/modules/posts/posts.test.ts`、`src/modules/dashboard/queries.test.ts`。
+- 关键决定与偏离：未新增 `Game.finishedAt` 字段和迁移，改用 Stage 16 已接入的 `Activity` 作为通关发生时间来源；这样不需要对历史游戏数据做不准确回填，也符合活动流记录关键动作的既有机制。
+- 遗留 TODO：历史上在 Activity 接入前已经处于 `FINISHED` 的游戏不会被计入首页“今年通关”，如需保留旧数据口径，可后续补一次人工确认后的历史活动回填脚本。
+- 验证：`npx.cmd vitest run src/modules/posts/posts.test.ts src/modules/dashboard/queries.test.ts` 通过；`npx.cmd vitest run src/lib/activity.test.ts src/lib/activity-actions.test.ts src/modules/games/games.test.ts src/modules/todos/todos.test.ts src/modules/posts/posts.test.ts src/modules/dashboard/queries.test.ts` 通过；`npm.cmd run check` 通过。
+
 ### 2026-06-15 · Server Action 初始状态导出修复
 - 完成内容：修复费用页和设置页在 Next.js 16.2.9 / Turbopack 下因 `"use server"` 文件导出普通对象导致的运行时报错，并避免客户端 `useState` 在 render 阶段误触发 Server Action 引用。
 - 关键文件：`src/modules/expenses/action-state.ts`、`src/modules/settings/action-state.ts`、`src/modules/expenses/actions.ts`、`src/modules/settings/actions.ts`、`src/app/(private)/expenses/expenses-ledger.tsx`、`src/app/(private)/admin/expense-categories/expense-categories-admin.tsx`、`src/app/(private)/admin/settings/settings-form.tsx`、`src/lib/server-action-exports.test.ts`。

@@ -48,7 +48,7 @@ export async function getPublishedPageCount() {
 }
 
 export async function getPublishedPostsPage(page: number) {
-  const safePage = Math.max(1, Math.floor(page));
+  const safePage = Number.isSafeInteger(page) && page > 0 ? page : 1;
   const [total, posts] = await Promise.all([
     getPublishedPostCount(),
     db.post.findMany({
