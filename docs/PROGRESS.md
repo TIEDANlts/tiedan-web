@@ -1,13 +1,21 @@
 # 项目进度
 
 ## 当前状态
-- 进行中：Stage 12（待开始）
-- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9、Stage 10、Stage 11
+- 进行中：Stage 13（待开始）
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9、Stage 10、Stage 11、Stage 12
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 12 · 微信 / 支付宝账单导入 —— 2026-06-15 完成
+- 完成内容：新增微信 / 支付宝 CSV 账单解析器，支持 UTF-8 与 GBK 自动解码、按“交易时间”定位表头、跳过头尾说明/汇总行、金额正数字符串归一化、方向映射、状态过滤、txnNo 提取和坏行错误收集；新增 `/expenses/import` 上传 → 确认平台 → 预览 → 确认导入流程，预览展示解析成功、将导入、重复跳过、状态过滤和解析失败统计；确认导入在单事务内创建 `ImportBatch` 并逐行写入 `Transaction`，依赖 `[platform, txnNo]` 唯一约束兜底去重；新增 `/expenses/import/history` 和导入结果页；新增自动分类函数并接入导入与手动记账，流水页行内改分类可确认沉淀商户关键词。
+- 关键文件：`src/modules/expenses/parsers/*` 实现支付宝 / 微信解析和平台识别；`src/modules/expenses/categorize.ts` 与 `src/modules/expenses/import-executor.ts` 封装分类和预览/入库转换；`src/modules/expenses/actions.ts`、`src/modules/expenses/queries.ts` 接入 Server Actions、导入批次查询和规则沉淀；`src/app/(private)/expenses/import/*` 与 `src/app/(private)/expenses/expenses-ledger.tsx` 实现导入 UI、历史入口和流水页交互；`tests/fixtures/alipay-sample.csv`、`tests/fixtures/wechat-sample.csv` 与 `src/modules/expenses/import.test.ts` 覆盖账单格式边界。
+- 关键决定与偏离：执行时仓库仍缺少用户提供的两份真实脱敏账单 fixtures，因此本轮创建了最小脱敏样本，其中支付宝样本以 GBK 写入、微信样本以 UTF-8 写入；没有新增依赖，复用 Stage 10 已锁定的 `xlsx@0.18.5` 与 `iconv-lite@0.7.2`；未修改 Prisma schema，沿用 Stage 11 的 `ImportBatch(total, inserted, skipped)` 和 `Transaction.importBatchId`；导入写入采用逐行 create 捕获唯一键冲突，以保留单事务和准确 skipped 计数。
+- Stage 12 验收：通过 - fixtures 单测覆盖支付宝 GBK 解码、微信 UTF-8 解码、表头定位、微信 `¥` 剥离、方向映射、状态过滤、txnNo 提取、raw 保留和错误收集；通过 - 自动识别可区分支付宝 / 微信样本，未知文件返回手动选择；通过 - 自动分类按 sort 优先匹配 merchant + item，支付宝交易分类可兜底映射；通过 - 同一文件重复导入会按 txnNo 查重并依赖唯一约束兜底跳过；通过 - 不计收支行解析为 `NEUTRAL`，既有日小计逻辑继续排除收入与不计收支；通过 - 解析失败行进入预览错误列表，不影响其余行导入；待人工验收 - 真实完整微信、支付宝账单的金额 / 时间 / 方向抽查和重复导入全跳过需要用户用完整文件最终验证。
+- 遗留 TODO：用用户真实完整账单替换或追加 fixtures 后重跑 `npx.cmd vitest run src/modules/expenses/import.test.ts`，并在浏览器里完成一次真实导入点验；若真实账单列名出现地区或版本差异，再按 fixtures 增补列名兼容；Stage 16 活动流接入时按 PLAN 记录“导入了 x 笔账单”。
+- 验证：`npx.cmd vitest run src/modules/expenses/import.test.ts` 先红灯失败于缺少解析模块，完成实现后 ✅（8 条通过）；`npx.cmd vitest run src/modules/expenses/import.test.ts src/modules/expenses/expenses.test.ts` ✅（2 个测试文件、13 条通过）；`npx.cmd tsc --noEmit` ✅；`npm.cmd run lint` ✅；`npm.cmd run check` ✅（21 个测试文件、104 条测试通过）。
 
 ### Stage 11 · 记账基础 —— 2026-06-15 完成
 - 完成内容：新增 `Transaction`、`ExpenseCategory`、`ImportBatch` 数据模型与迁移，消费分类增加 `direction` 区分支出/收入；`scripts/seed.ts` 幂等创建默认消费分类；新增 `/expenses` 私密流水页，支持月份切换、方向/分类/平台/关键词组合筛选、按日倒序分组、日支出小计、行内改分类和二次确认删除；新增移动端优先的“记一笔” Dialog 与底部悬浮入口；新增 `/admin/expense-categories` 分类 CRUD、TagInput 关键词编辑和拖拽排序。

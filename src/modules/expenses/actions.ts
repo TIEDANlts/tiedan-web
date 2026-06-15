@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { buildExpenseImportPreview, normalizeImportRowsForCreate } from "@/modules/expenses/import-executor";
+import { detectExpenseImportPlatform, parseExpenseImportFile, type ExpenseImportPlatform } from "@/modules/expenses/parsers";
+import { categorizeExpenseTransaction } from "@/modules/expenses/categorize";
 import {
   isManualDirection,
   normalizeManualTransactionInput,
@@ -31,6 +34,8 @@ async function requireSession() {
 
 function revalidateExpenses() {
   revalidatePath("/expenses");
+  revalidatePath("/expenses/import");
+  revalidatePath("/expenses/import/history");
   revalidatePath("/admin/expense-categories");
 }
 
@@ -57,6 +62,19 @@ async function categoryOptions() {
   return categories.flatMap((category) =>
     category.direction === "EXPENSE" || category.direction === "INCOME"
       ? [{ ...category, direction: category.direction as ManualDirectionValue }]
+      : [],
+  );
+}
+
+async function categoriesForCategorize() {
+  const categories = await db.expenseCategory.findMany({
+    select: { id: true, name: true, direction: true, keywords: true, sort: true },
+    orderBy: [{ sort: "asc" }, { name: "asc" }],
+  });
+
+  return categories.flatMap((category) =>
+    category.direction === "EXPENSE" || category.direction === "INCOME"
+      ? [{ ...category, direction: category.direction }]
       : [],
   );
 }
@@ -129,6 +147,18 @@ export async function createManualTransactionAction(
     return { ok: false, message: "请检查记账信息。", errors: normalized.errors };
   }
 
+  if (!normalized.data.categoryId) {
+    normalized.data.categoryId = categorizeExpenseTransaction(
+      {
+        direction: normalized.data.direction,
+        merchant: normalized.data.merchant,
+        item: normalized.data.note,
+        sourceCategory: null,
+      },
+      await categoriesForCategorize(),
+    );
+  }
+
   await db.transaction.create({
     data: normalized.data,
   });
@@ -174,6 +204,40 @@ export async function updateTransactionCategoryAction(id: string, categoryId: st
   revalidateExpenses();
 
   return { ok: true, message: "分类已更新。" };
+}
+
+export async function updateTransactionCategoryWithRuleAction(
+  id: string,
+  categoryId: string | null,
+  rememberMerchant: boolean,
+) {
+  await requireSession();
+
+  const transaction = await db.transaction.findUnique({
+    where: { id },
+    select: { merchant: true },
+  });
+
+  const result = await updateTransactionCategoryAction(id, categoryId);
+  if (!result.ok || !rememberMerchant || !categoryId || !transaction?.merchant) {
+    return result;
+  }
+
+  const category = await db.expenseCategory.findUnique({
+    where: { id: categoryId },
+    select: { keywords: true },
+  });
+
+  if (category && !category.keywords.includes(transaction.merchant)) {
+    await db.expenseCategory.update({
+      where: { id: categoryId },
+      data: { keywords: [...category.keywords, transaction.merchant] },
+    });
+  }
+
+  revalidateExpenses();
+
+  return { ok: true, message: "分类已更新，规则也记住了。" };
 }
 
 export async function deleteTransactionAction(id: string) {
@@ -295,4 +359,164 @@ export async function reorderExpenseCategoriesAction(orderedIds: string[]) {
 
   await db.$transaction(updates);
   revalidateExpenses();
+}
+
+export type ExpenseImportParseState =
+  | {
+      ok: true;
+      fileName: string;
+      platform: ExpenseImportPlatform | null;
+      selectedPlatform: ExpenseImportPlatform | null;
+      encoding: "utf8" | "gbk";
+      payload: string;
+      message: string | null;
+    }
+  | { ok: false; message: string };
+
+export type ExpenseImportPreviewState =
+  | {
+      ok: true;
+      fileName: string;
+      platform: ExpenseImportPlatform;
+      payload: string;
+      stats: ReturnType<typeof buildExpenseImportPreview>["stats"];
+      rows: ReturnType<typeof buildExpenseImportPreview>["rows"];
+      filteredRows: ReturnType<typeof parseExpenseImportFile>["filteredRows"];
+      errors: ReturnType<typeof parseExpenseImportFile>["errors"];
+    }
+  | { ok: false; message: string };
+
+export type ExpenseImportExecuteState =
+  | {
+      ok: true;
+      batchId: string;
+      inserted: number;
+      skipped: number;
+      total: number;
+    }
+  | { ok: false; message: string };
+
+function encodePayload(buffer: Buffer) {
+  return buffer.toString("base64");
+}
+
+function decodePayload(payload: string) {
+  return Buffer.from(payload, "base64");
+}
+
+function isExpenseImportPlatform(value: string): value is ExpenseImportPlatform {
+  return value === "alipay" || value === "wechat";
+}
+
+async function existingTxnNos(platform: ExpenseImportPlatform, txnNos: string[]) {
+  const rows = await db.transaction.findMany({
+    where: { platform, txnNo: { in: txnNos } },
+    select: { txnNo: true },
+  });
+
+  return new Set(rows.flatMap((row) => (row.txnNo ? [row.txnNo] : [])));
+}
+
+export async function parseExpenseImportFileAction(formData: FormData): Promise<ExpenseImportParseState> {
+  await requireSession();
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, message: "请选择要导入的微信或支付宝 CSV 文件。" };
+  }
+
+  if (!/\.csv$/i.test(file.name)) {
+    return { ok: false, message: "账单导入只支持 CSV 文件。" };
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const detected = detectExpenseImportPlatform(buffer);
+
+  return {
+    ok: true,
+    fileName: file.name,
+    platform: detected.platform,
+    selectedPlatform: detected.platform,
+    encoding: detected.encoding,
+    payload: encodePayload(buffer),
+    message: detected.platform ? null : "没有自动识别出平台，请手动选择微信或支付宝。",
+  };
+}
+
+export async function previewExpenseImportAction(input: {
+  payload: string;
+  fileName: string;
+  platform: ExpenseImportPlatform;
+}): Promise<ExpenseImportPreviewState> {
+  await requireSession();
+
+  if (!isExpenseImportPlatform(input.platform)) {
+    return { ok: false, message: "请选择账单平台。" };
+  }
+
+  const parsed = parseExpenseImportFile(decodePayload(input.payload), input.platform);
+  const existing = await existingTxnNos(input.platform, parsed.rows.map((row) => row.txnNo));
+  const preview = buildExpenseImportPreview(parsed, await categoriesForCategorize(), existing);
+
+  return {
+    ok: true,
+    fileName: input.fileName,
+    platform: input.platform,
+    payload: input.payload,
+    stats: preview.stats,
+    rows: preview.rows,
+    filteredRows: parsed.filteredRows,
+    errors: parsed.errors,
+  };
+}
+
+export async function executeExpenseImportAction(input: {
+  payload: string;
+  fileName: string;
+  platform: ExpenseImportPlatform;
+}): Promise<ExpenseImportExecuteState> {
+  await requireSession();
+
+  if (!isExpenseImportPlatform(input.platform)) {
+    return { ok: false, message: "请选择账单平台。" };
+  }
+
+  const parsed = parseExpenseImportFile(decodePayload(input.payload), input.platform);
+  const existingBefore = await existingTxnNos(input.platform, parsed.rows.map((row) => row.txnNo));
+  const categories = await categoriesForCategorize();
+
+  const result = await db.$transaction(async (tx) => {
+    const batch = await tx.importBatch.create({
+      data: {
+        platform: input.platform,
+        filename: input.fileName,
+        total: parsed.rows.length,
+        inserted: 0,
+        skipped: existingBefore.size + parsed.filteredRows.length,
+      },
+    });
+    let inserted = 0;
+    let skipped = existingBefore.size + parsed.filteredRows.length;
+
+    for (const row of normalizeImportRowsForCreate(parsed, categories, existingBefore, batch.id)) {
+      try {
+        await tx.transaction.create({ data: row });
+        inserted += 1;
+      } catch {
+        skipped += 1;
+      }
+    }
+
+    await tx.importBatch.update({
+      where: { id: batch.id },
+      data: { inserted, skipped },
+    });
+
+    return { batchId: batch.id, inserted, skipped, total: parsed.rows.length };
+  });
+
+  revalidateExpenses();
+  revalidatePath(`/expenses/import/result/${result.batchId}`);
+
+  return { ok: true, ...result };
 }
