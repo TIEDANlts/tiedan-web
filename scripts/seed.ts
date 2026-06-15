@@ -2,6 +2,8 @@ import "dotenv/config";
 import bcrypt from "bcrypt";
 import { fileURLToPath } from "node:url";
 
+import { defaultExpenseCategories } from "../src/modules/expenses/default-categories";
+
 type Env = {
   ADMIN_USERNAME?: string;
   ADMIN_PASSWORD?: string;
@@ -14,6 +16,24 @@ type UserStore = {
       create: { username: string; passwordHash: string };
       update: { passwordHash: string };
     }): Promise<{ username: string }>;
+  };
+};
+
+type ExpenseCategoryStore = {
+  expenseCategory: {
+    findMany(input: {
+      where: { name: { in: string[] } };
+      select: { name: true };
+    }): Promise<Array<{ name: string }>>;
+    create(input: {
+      data: {
+        name: string;
+        direction: "EXPENSE" | "INCOME";
+        icon: string;
+        keywords: string[];
+        sort: number;
+      };
+    }): Promise<unknown>;
   };
 };
 
@@ -50,6 +70,27 @@ export async function createAdminUser({
   });
 }
 
+export async function seedDefaultExpenseCategories(db: ExpenseCategoryStore) {
+  const existingCategories = await db.expenseCategory.findMany({
+    where: { name: { in: defaultExpenseCategories.map((category) => category.name) } },
+    select: { name: true },
+  });
+  const existingNames = new Set(existingCategories.map((category) => category.name));
+
+  for (const category of defaultExpenseCategories) {
+    if (existingNames.has(category.name)) {
+      continue;
+    }
+
+    await db.expenseCategory.create({
+      data: {
+        ...category,
+        keywords: [...category.keywords],
+      },
+    });
+  }
+}
+
 async function main() {
   const { db } = await import("../src/lib/db");
   const credentials = readAdminCredentials({
@@ -57,8 +98,10 @@ async function main() {
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
   });
   const user = await createAdminUser({ ...credentials, db });
+  await seedDefaultExpenseCategories(db);
 
   console.log(`管理员账号已就绪：${user.username}`);
+  console.log("默认消费分类已就绪");
 
   await db.$disconnect();
 }
