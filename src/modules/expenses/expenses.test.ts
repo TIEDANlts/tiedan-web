@@ -30,6 +30,7 @@ describe("parseExpenseFilters", () => {
       ),
     ).toEqual({
       month: "2026-06",
+      date: "",
       direction: "EXPENSE",
       categoryId: "food",
       platform: "manual",

@@ -40,6 +40,9 @@ function createHref(pathname: string, filters: ExpenseFilters, patch: Partial<Ex
   const params = new URLSearchParams();
 
   params.set("month", next.month);
+  if (next.date) {
+    params.set("date", next.date);
+  }
   if (next.direction !== "ALL") {
     params.set("direction", next.direction);
   }

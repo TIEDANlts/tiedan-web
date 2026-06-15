@@ -1,13 +1,21 @@
 # 项目进度
 
 ## 当前状态
-- 进行中：Stage 13（待开始）
-- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9、Stage 10、Stage 11、Stage 12
+- 进行中：（无）
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9、Stage 10、Stage 11、Stage 12、Stage 13
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 13 · 消费报表 + 快捷记账入口 —— 2026-06-15 完成
+- 完成内容：新增 `/expenses/stats` 私密消费报表页，支持月 / 周 / 年视图和 URL 周期参数；月视图展示本月支出、环比、收入、结余、分类占比、每日支出、Top 10 商户和分类明细；周视图展示本周 / 上周按日对比，并按最近 8 周计算星期几平均支出；年视图展示 12 个月支出趋势、收入虚线、年度分类占比和年度总览；新增 `POST /api/quick/expense` 快捷记账接口，使用 `QUICK_ADD_TOKEN` Bearer Token、内存级每分钟 10 次限频、末尾金额解析和自动分类写入 `platform=quick` 流水。
+- 关键文件：`src/modules/expenses/stats.ts` 封装周期解析、Decimal 汇总和服务端统计查询；`src/components/expense-chart.tsx` 与 `src/app/(private)/expenses/stats/expense-stats-charts.tsx` 封装 ECharts 客户端图表；`src/app/(private)/expenses/stats/page.tsx` 实现报表页面；`src/modules/expenses/quick.ts` 与 `src/app/api/quick/expense/route.ts` 实现快捷记账解析、限频和 API；`docs/QUICK_ADD.md` 记录 iOS、安卓与 curl 配置。
+- 关键决定与偏离：新增并锁定 `echarts@6.1.0` 与 `echarts-for-react@3.0.6`；未修改 Prisma schema、未运行迁移；图表点击跳转复用 `/expenses`，并扩展流水页支持 `date=YYYY-MM-DD` 参数；分类读取抽为 `src/modules/expenses/category-options.ts`，供手动记账、导入和快捷 API 共用；周均分布按确认口径统计当前周及之前 7 周。
+- Stage 13 验收：通过 - 统计纯逻辑单测覆盖周期参数回退、Decimal 收支汇总、排除 `NEUTRAL`、上月无数据环比显示 `--`、年度 12 个月补零和最近 8 周星期平均；通过 - 快捷文本解析和内存限频单测覆盖正常文本、无金额、负数、超过两位小数和第 11 次限流；通过 - `/api/quick/**` 仍在中间件白名单；待人工验收 - 真实账单数据下月报表金额、分类占比、Top 商户和日柱状图需要用户对照流水页核对；待人工验收 - 375px 真机图表适配与快捷指令真机写入需要用户测试。
+- 遗留 TODO：最终上线时在生产环境配置真实 `QUICK_ADD_TOKEN`，并用 `docs/QUICK_ADD.md` 的 iOS / 安卓步骤做一次真机验收；如果未来部署多实例或遭遇扫接口，再把内存限频替换为 Redis 限频。
+- 验证：`npx.cmd vitest run src/modules/expenses/stats.test.ts src/modules/expenses/quick.test.ts src/modules/expenses/expenses.test.ts src/modules/expenses/import.test.ts` ✅（4 个测试文件、21 条通过）；`npx.cmd tsc --noEmit` ✅；`npm.cmd run lint` ✅；`npm.cmd run check` ✅（23 个测试文件、112 条测试通过）。
 
 ### Stage 12 · 微信 / 支付宝账单导入 —— 2026-06-15 完成
 - 完成内容：新增微信 / 支付宝 CSV 账单解析器，支持 UTF-8 与 GBK 自动解码、按“交易时间”定位表头、跳过头尾说明/汇总行、金额正数字符串归一化、方向映射、状态过滤、txnNo 提取和坏行错误收集；新增 `/expenses/import` 上传 → 确认平台 → 预览 → 确认导入流程，预览展示解析成功、将导入、重复跳过、状态过滤和解析失败统计；确认导入在单事务内创建 `ImportBatch` 并逐行写入 `Transaction`，依赖 `[platform, txnNo]` 唯一约束兜底去重；新增 `/expenses/import/history` 和导入结果页；新增自动分类函数并接入导入与手动记账，流水页行内改分类可确认沉淀商户关键词。

@@ -5,6 +5,7 @@ import { formatShanghaiDate, formatShanghaiDateTime } from "@/lib/dayjs";
 import { formatMoney } from "@/lib/money";
 import {
   groupTransactionsByDate,
+  dayRange,
   monthRange,
   parseExpenseFilters,
   shiftMonth,
@@ -123,7 +124,7 @@ function serializeTransaction(
 }
 
 function buildTransactionWhere(filters: ExpenseFilters): Prisma.TransactionWhereInput {
-  const range = monthRange(filters.month);
+  const range = filters.date ? dayRange(filters.date) : monthRange(filters.month);
   const and: Prisma.TransactionWhereInput[] = [
     {
       txnTime: {

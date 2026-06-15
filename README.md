@@ -2,7 +2,7 @@
 
 单用户个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
 
-当前进度：Stage 12 已完成微信 / 支付宝账单导入；Stage 0-11 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 12 已接入账单解析、预览、批量导入、自动分类、规则沉淀和导入历史。
+当前进度：Stage 13 已完成消费报表与快捷记账入口；Stage 0-12 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 13 已接入月 / 周 / 年报表、ECharts 图表容器、快捷记账 Bearer Token API 和配置文档。
 
 ## 本地环境
 
@@ -19,6 +19,7 @@
   - `STEAM_API_KEY` / `STEAM_ID`（Stage 8 Steam 游戏库同步）
   - `TMDB_API_KEY`（Stage 10 电影 / 剧集搜索补全，可选；失败会回退 NeoDB）
   - `CRON_SECRET`（Stage 8 定时同步接口 Bearer token）
+  - `QUICK_ADD_TOKEN`（Stage 13 快捷记账 Bearer token；未配置则接口返回 404）
   - `HEALTHCHECKS_STEAM_URL`（可选；Stage 8 Steam 同步心跳）
   - `ICP_BEIAN_NO` / `GONGAN_BEIAN_NO`（可选；配置后公开页脚展示备案信息）
   - `BASE_URL`（e2e 使用；本地可用 `http://localhost:3000`）
@@ -124,6 +125,8 @@ npm.cmd run db:seed
 
 Stage 12 未新增第三方依赖；复用 `xlsx@0.18.5` 与 `iconv-lite@0.7.2`。`/expenses/import` 支持微信 UTF-8 CSV 与支付宝 GBK CSV，自动定位包含“交易时间”的表头行，过滤交易关闭 / 已全额退款行，预览重复与解析失败后再确认导入；`/expenses/import/history` 展示导入批次。测试 fixtures 包含 `tests/fixtures/alipay-sample.csv`（GBK）与 `tests/fixtures/wechat-sample.csv`（UTF-8）。
 
+Stage 13 新增图表依赖：`echarts@6.1.0`、`echarts-for-react@3.0.6`。`/expenses/stats` 提供月 / 周 / 年消费报表；`POST /api/quick/expense` 使用 `Authorization: Bearer ${QUICK_ADD_TOKEN}` 快捷记账，配置方法见 `docs/QUICK_ADD.md`。
+
 生产 Compose 配置检查（通过 WSL Docker）：
 
 ```powershell
@@ -145,7 +148,9 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 书影状态联动：Server Action 中切换为在看 / 在读且 `startedAt` 为空时自动填今天；切换为看过 / 读过且 `finishedAt` 为空时自动填今天；两个日期都可在详情页手动修改。
 - 书影导入：`/media/import` 提供上传、列映射、预览和执行四步流程；支持标题 / 评分 / 短评 / 日期 / 链接 / 年份 / 封面列自动预选，按 `doubanId` 或类型 + 标题 + 年份跳过重复，逐行容错并展示成功、跳过、失败原因。
 - 书影搜索补全：添加书影 Dialog 顶部可联网搜索；图书使用 NeoDB，电影 / 剧集优先 TMDB，TMDB 不可用时自动回退 NeoDB 并提示；选中结果后回填标题、原名、作者 / 导演、年份、上映 / 出版日期、外部 ID 和本地化封面。
-- 消费流水：`/expenses` 是私密消费流水页，支持月份左右切换、方向 / 分类 / 平台 / 关键词组合筛选，按日期倒序分组，日支出小计只统计支出；支出金额使用消费模块色，收入使用绿色模块色，不计收支显示弱色。
+- 消费流水：`/expenses` 是私密消费流水页，支持月份左右切换、日期 / 方向 / 分类 / 平台 / 关键词组合筛选，按日期倒序分组，日支出小计只统计支出；支出金额使用消费模块色，收入使用绿色模块色，不计收支显示弱色。
+- 消费报表：`/expenses/stats` 提供月 / 周 / 年视图；月视图包含本月支出、环比、收入、结余、分类占比、每日支出、Top 10 商户和分类明细；周视图比较本周 / 上周并按最近 8 周计算星期平均；年视图展示 12 个月支出趋势与收入虚线、年度分类占比和年度总览。
+- 快捷记账：`POST /api/quick/expense` 使用独立 Bearer Token，解析“咖啡 35”这类文本末尾金额，写入 `platform=quick` 支出流水并自动分类；同一 token 每分钟最多 10 次，未配置 `QUICK_ADD_TOKEN` 时接口禁用。
 - 手动记账：`/expenses` 顶部和移动端底部提供“记一笔”入口；表单使用大号金额输入、支出 / 收入切换、按方向过滤的分类宫格、默认今天日期、商户和备注字段，手动流水固定写入 `platform=manual`、`txnNo=null`；未手选分类时会复用导入分类规则尝试自动分类。
 - 账单导入：`/expenses/import` 支持微信 / 支付宝 CSV 上传、平台自动识别、预览统计和确认导入；支付宝 CSV 按 GBK 自动解码，微信金额会剥离 `¥` 前缀，重复交易按 `[platform, txnNo]` 跳过，导入批次写入 `ImportBatch` 并可在 `/expenses/import/history` 查看。
 - 分类规则沉淀：流水页行内修改分类时，如果该交易有商户名，会询问是否以后把该商户归到所选分类；确认后会把商户名追加进该分类 keywords。
