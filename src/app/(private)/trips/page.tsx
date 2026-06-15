@@ -1,11 +1,14 @@
-import { PrivatePlaceholderPage } from "@/components/private-placeholder-page";
+import { TripsLibrary } from "@/app/(private)/trips/trips-library";
+import { getTripsPageData, type TripSearchParams } from "@/modules/trips/queries";
 
-export default function TripsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function TripsPage({ searchParams }: { searchParams: Promise<TripSearchParams> }) {
+  const data = await getTripsPageData(await searchParams);
+
   return (
-    <PrivatePlaceholderPage
-      eyebrow="旅行"
-      title="旅行（建设中）"
-      description="Stage 14 会在这里接入行程、地点、照片和足迹地图。"
-    />
+    <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <TripsLibrary data={data} />
+    </main>
   );
 }

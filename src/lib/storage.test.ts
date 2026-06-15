@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   assertPublicUploadPath,
+  assertPrivateUploadPath,
   detectImageType,
   extensionFromContentType,
   getUploadRoot,
@@ -67,6 +68,15 @@ describe("assertPublicUploadPath", () => {
   });
 });
 
+describe("assertPrivateUploadPath", () => {
+  it("maps private upload URLs into the private area and rejects traversal", () => {
+    const privateRoot = path.join(getUploadRoot(), "private");
+
+    expect(assertPrivateUploadPath(["trips", "a.webp"])).toBe(path.join(privateRoot, "trips", "a.webp"));
+    expect(() => assertPrivateUploadPath(["..", "public", "a.webp"])).toThrow("文件路径无效");
+  });
+});
+
 describe("save", () => {
   it("writes a processed image and a 480px thumbnail", async () => {
     const input = await sharp({
@@ -102,5 +112,28 @@ describe("save", () => {
     expect(Math.max(imageMeta.width ?? 0, imageMeta.height ?? 0)).toBeLessThanOrEqual(2000);
     expect(Math.max(thumbMeta.width ?? 0, thumbMeta.height ?? 0)).toBe(480);
     await expect(stat(thumbPath)).resolves.toBeTruthy();
+  });
+
+  it("returns authenticated private file URLs for private uploads", async () => {
+    const input = await sharp({
+      create: {
+        width: 32,
+        height: 32,
+        channels: 3,
+        background: "#1f9e86",
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const result = await save(input, {
+      area: "private",
+      subdir: "trips",
+      contentType: "image/png",
+      filename: "photo.png",
+    });
+
+    expect(result.url).toMatch(/^\/api\/files\/private\/trips\/\d+-[a-f0-9-]+\.webp$/);
+    expect(result.thumbUrl).toMatch(/^\/api\/files\/private\/trips\/\d+-[a-f0-9-]+-thumb\.webp$/);
   });
 });

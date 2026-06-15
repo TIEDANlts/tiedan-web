@@ -172,3 +172,36 @@ model ImportBatch {
   createdAt    DateTime      @default(now())
   transactions Transaction[]
 }
+
+enum TripStatus {
+  PLANNED
+  DONE
+}
+
+model Trip {
+  id           String     @id @default(cuid())
+  title        String
+  status       TripStatus @default(PLANNED)
+  startDate    DateTime   @db.Date
+  endDate      DateTime   @db.Date
+  destinations String[]
+  coverUrl     String?
+  summaryMd    String?    @db.Text
+  budget       Decimal?   @db.Decimal(12, 2)
+  checklist    Json?
+  days         TripDay[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model TripDay {
+  id        String   @id @default(cuid())
+  tripId    String
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  noteMd    String?  @db.Text
+  locations Json     @default("[]")
+  photos    String[]
+
+  @@unique([tripId, date])
+}
