@@ -2,8 +2,7 @@
 
 单用户个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
 
-当前进度：Stage 13 已完成消费报表与快捷记账入口；Stage 0-12 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 13 已接入月 / 周 / 年报表、ECharts 图表容器、快捷记账 Bearer Token API 和配置文档。
-当前分支正在实现 Stage 14 旅行模块：行程、按天地点/照片、私密照片读取、天地图/OSM 地图与足迹页。
+当前进度：Stage 15 已完成全局日历；Stage 0-14 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 15 已接入 FullCalendar、跨模块事件聚合、重要日子模型与日历内快捷新建。
 
 ## 本地环境
 
@@ -131,6 +130,15 @@ Stage 13 新增图表依赖：`echarts@6.1.0`、`echarts-for-react@3.0.6`。`/ex
 
 Stage 14 新增地图依赖：`leaflet@1.9.4`、`react-leaflet@5.0.0`、`@types/leaflet@1.9.21`。`/trips` 是旅行行程列表，`/trips/[id]` 支持按天维护地点、笔记和私密照片，`/trips/footprint` 展示已完成行程足迹；私密照片通过 `/api/files/private/**` 登录鉴权读取。
 
+Stage 15 新增日历依赖：`@fullcalendar/core@6.1.20`、`@fullcalendar/react@6.1.20`、`@fullcalendar/daygrid@6.1.20`、`@fullcalendar/list@6.1.20`、`@fullcalendar/interaction@6.1.20`。新增数据库迁移 `20260615085002_add_special_days`，本地更新数据库时运行：
+
+```powershell
+npx.cmd prisma migrate dev
+npx.cmd prisma generate
+```
+
+`/calendar` 会聚合待办、旅行、重要日子和书影上映日；桌面默认月视图，手机默认列表视图，模块图例显隐偏好保存在浏览器 localStorage。
+
 生产 Compose 配置检查（通过 WSL Docker）：
 
 ```powershell
@@ -144,6 +152,8 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 登录：Auth.js v5 Credentials，bcrypt 校验 `User.passwordHash`，JWT session 30 天。
 - Seed：`scripts/seed.ts` 幂等创建 / 更新唯一管理员，并补齐默认消费分类。
 - 私密布局：桌面端固定侧边栏，移动端汉堡抽屉；菜单包含仪表盘、待办、日历、游戏、书影、旅行、消费、消费分类、博客管理、导航管理和设置。
+- 全局日历：`/calendar` 使用 FullCalendar 聚合待办、旅行、重要日子和书影上映日；中文 locale、周一开头、桌面月视图、手机列表视图，支持“月 / 列表”切换、模块图例显隐、事件点击跳转和日期空白处快捷新建。
+- 重要日子：日历内可新建一次性或每年重复的重要日子；重复事件按查询年份展开，2 月 29 日在平年顺延到 2 月 28 日。
 - 游戏：`/games` 是私密游戏收藏册，支持状态 Tab（含计数）、平台筛选、标签多选、名称搜索和最近游玩/评分/名称排序；顶部统计显示总数、已通关数和总时长。
 - 游戏管理：支持手动添加游戏、上传或填写封面、评分、时长、标签和 Markdown 感想；详情 Dialog 可编辑全部手动字段，并提供想玩/库存 → 在玩 → 已通关的快捷状态流转。
 - Steam 同步：`/games` 顶部可手动同步 Steam 游戏库并显示上次同步时间；同步按 `steamAppId` 合并，只更新名称、封面、总时长、近两周时长和最近游玩时间，不覆盖评分、感想、标签和用户手动状态，唯一自动状态流转是 BACKLOG 且近两周有时长时变为 PLAYING；`GET /api/cron/steam-sync` 使用 `Authorization: Bearer ${CRON_SECRET}` 供宿主机 cron 调用。

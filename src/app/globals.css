@@ -199,3 +199,144 @@ body {
   color: var(--shiki-dark) !important;
   background-color: var(--shiki-dark-bg) !important;
 }
+
+@layer components {
+  .calendar-shell .fc {
+    --fc-border-color: var(--border);
+    --fc-page-bg-color: var(--surface);
+    --fc-neutral-bg-color: var(--surface-2);
+    --fc-list-event-hover-bg-color: var(--surface-2);
+    color: var(--ink);
+    font-family: var(--font-ui), var(--font-zh-sans);
+  }
+
+  .calendar-shell .fc .fc-toolbar {
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .calendar-shell .fc .fc-toolbar-title {
+    color: var(--ink);
+    font-family: var(--font-public-serif), var(--font-zh-serif);
+    font-size: 1.25rem;
+    font-weight: 650;
+    letter-spacing: 0;
+  }
+
+  .calendar-shell .fc .fc-button {
+    border-color: var(--border);
+    border-radius: var(--app-radius-md);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 0.875rem;
+    font-weight: 600;
+    box-shadow: none;
+  }
+
+  .calendar-shell .fc .fc-button:hover,
+  .calendar-shell .fc .fc-button:focus {
+    border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
+    background: var(--surface-2);
+    color: var(--ink);
+    box-shadow: none;
+  }
+
+  .calendar-shell .fc .fc-button:disabled {
+    background: var(--surface-2);
+    color: var(--ink-3);
+    opacity: 1;
+  }
+
+  .calendar-shell .fc .fc-col-header-cell-cushion,
+  .calendar-shell .fc .fc-daygrid-day-number,
+  .calendar-shell .fc .fc-list-day-text,
+  .calendar-shell .fc .fc-list-day-side-text {
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .calendar-shell .fc .fc-col-header-cell-cushion {
+    padding-block: 0.625rem;
+    font-size: 0.8125rem;
+    font-weight: 650;
+  }
+
+  .calendar-shell .fc .fc-daygrid-day-number {
+    padding: 0.5rem;
+    font-size: 0.8125rem;
+  }
+
+  .calendar-shell .fc .fc-daygrid-day.fc-day-today,
+  .calendar-shell .fc .fc-timegrid-col.fc-day-today {
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+
+  .calendar-shell .fc .fc-daygrid-day-frame {
+    min-height: 7rem;
+  }
+
+  .calendar-shell .fc .fc-event {
+    border-radius: min(var(--app-radius-sm), 8px);
+    border-width: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .calendar-shell .fc .fc-daygrid-event {
+    margin-top: 0.125rem;
+    padding: 0.0625rem 0.25rem;
+  }
+
+  .calendar-shell .fc .fc-event-title {
+    overflow-wrap: anywhere;
+  }
+
+  .calendar-shell .fc .fc-daygrid-more-link {
+    border-radius: min(var(--app-radius-sm), 8px);
+    color: var(--ink-2);
+    font-size: 0.75rem;
+    font-weight: 650;
+    padding-inline: 0.25rem;
+  }
+
+  .calendar-shell .fc .fc-list {
+    border-radius: var(--app-radius-lg);
+    overflow: hidden;
+  }
+
+  .calendar-shell .fc .fc-list-day-cushion {
+    background: var(--surface-2);
+    color: var(--ink);
+  }
+
+  .calendar-shell .fc .fc-list-event-title a {
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .calendar-shell .fc .fc-list-event-dot {
+    border-width: 0.35rem;
+  }
+
+  @media (max-width: 767px) {
+    .calendar-shell .fc .fc-toolbar {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .calendar-shell .fc .fc-toolbar-chunk {
+      display: flex;
+      justify-content: center;
+    }
+
+    .calendar-shell .fc .fc-toolbar-title {
+      font-size: 1.125rem;
+      text-align: center;
+    }
+
+    .calendar-shell .fc .fc-daygrid-day-frame {
+      min-height: 5rem;
+    }
+  }
+}
