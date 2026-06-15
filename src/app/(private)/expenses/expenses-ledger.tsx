@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, FolderCog, Plus, ReceiptText, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, FolderCog, History, Plus, ReceiptText, Search, Trash2, Upload } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -22,6 +22,7 @@ import {
   deleteTransactionAction,
   initialExpenseActionState,
   updateTransactionCategoryAction,
+  updateTransactionCategoryWithRuleAction,
 } from "@/modules/expenses/actions";
 import type { ExpenseCategoryOption, ExpensePageData, ExpenseTransactionItem } from "@/modules/expenses/queries";
 import {
@@ -390,12 +391,28 @@ function CategorySelect({
   const options =
     item.direction === "NEUTRAL" ? categories : categories.filter((category) => category.direction === item.direction);
 
+  function updateCategory(nextCategoryId: string | null, rememberMerchant: boolean) {
+    startTransition(async () => {
+      await updateTransactionCategoryWithRuleAction(item.id, nextCategoryId, rememberMerchant);
+      router.refresh();
+    });
+  }
+
   return (
     <div className="flex items-center gap-2">
       <select
         value={item.categoryId ?? ""}
         onChange={(event) => {
           const nextCategoryId = event.target.value || null;
+          const nextCategory = options.find((category) => category.id === nextCategoryId);
+          if (item.merchant && nextCategory) {
+            updateCategory(
+              nextCategoryId,
+              window.confirm(`以后把『${item.merchant}』都归到${nextCategory.name}分类？`),
+            );
+            return;
+          }
+
           startTransition(async () => {
             await updateTransactionCategoryAction(item.id, nextCategoryId);
             router.refresh();
@@ -494,6 +511,18 @@ export function ExpensesLedger({ data }: { data: ExpensePageData }) {
             <Link href="/admin/expense-categories">
               <FolderCog className="size-4" />
               分类管理
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/expenses/import/history">
+              <History className="size-4" />
+              导入历史
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/expenses/import">
+              <Upload className="size-4" />
+              账单导入
             </Link>
           </Button>
           <ManualTransactionDialog categories={data.categories} today={data.today} />

@@ -65,6 +65,16 @@ export type ExpensePageData = {
   groups: ExpenseDayGroup[];
 };
 
+export type ExpenseImportBatchItem = {
+  id: string;
+  platform: string;
+  filename: string;
+  total: number;
+  inserted: number;
+  skipped: number;
+  createdAt: string;
+};
+
 function serializeCategory(category: {
   id: string;
   name: string;
@@ -204,4 +214,39 @@ export async function getExpensePageData(searchParams: ExpenseSearchParams): Pro
     platforms: platformRows.map((row) => row.platform),
     groups,
   };
+}
+
+export async function getExpenseImportHistory(): Promise<ExpenseImportBatchItem[]> {
+  const batches = await db.importBatch.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+
+  return batches.map((batch) => ({
+    id: batch.id,
+    platform: batch.platform,
+    filename: batch.filename,
+    total: batch.total,
+    inserted: batch.inserted,
+    skipped: batch.skipped,
+    createdAt: formatShanghaiDateTime(batch.createdAt),
+  }));
+}
+
+export async function getExpenseImportBatch(id: string): Promise<ExpenseImportBatchItem | null> {
+  const batch = await db.importBatch.findUnique({
+    where: { id },
+  });
+
+  return batch
+    ? {
+        id: batch.id,
+        platform: batch.platform,
+        filename: batch.filename,
+        total: batch.total,
+        inserted: batch.inserted,
+        skipped: batch.skipped,
+        createdAt: formatShanghaiDateTime(batch.createdAt),
+      }
+    : null;
 }
