@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { fetchWithRetry } from "@/lib/http";
+import { extractBearerToken, secureTokenEqual } from "@/lib/secure-compare";
 import { syncSteamLibrary } from "@/modules/games/steam";
 
 export const dynamic = "force-dynamic";
@@ -34,9 +35,9 @@ async function pingHealthcheck(success: boolean) {
 
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET?.trim();
-  const authorization = request.headers.get("authorization");
+  const token = extractBearerToken(request.headers.get("authorization"));
 
-  if (!secret || authorization !== `Bearer ${secret}`) {
+  if (!secret || !token || !secureTokenEqual(token, secret)) {
     return unauthorized();
   }
 

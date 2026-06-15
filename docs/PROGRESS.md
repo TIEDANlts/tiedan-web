@@ -9,6 +9,13 @@
 
 ## 修复日志
 
+### 2026-06-15 · 安全与导入补丁应用
+- 完成内容：应用 `tiedan-web-fixes.patch`，补强 Cron / 快捷记账 Bearer Token 常量时间比较、登录跳转 `from` 参数清洗、出站 HTTP SSRF 防护（URL 字面量与 DNS 解析阶段双校验）、账单 CSV 空表头列对齐、博客浏览去重 Map 过期清理，并补充对应单测；按要求删除补丁文件。
+- 关键文件：`src/lib/secure-compare.ts`、`src/lib/ssrf.ts`、`src/lib/http.ts`、`src/lib/auth/routes.ts`、`src/modules/expenses/parsers/common.ts`、`src/modules/posts/view.ts`、`src/app/api/cron/steam-sync/route.ts`、`src/app/api/quick/expense/route.ts`。
+- 关键决定与偏离：未新增第三方依赖；新增 `SSRF_ALLOW_PRIVATE` 逃生开关仅用于确需访问内网资源的本地/受控场景，默认拒绝 localhost、内网、链路本地和保留地址。
+- 遗留 TODO：如未来确需通过 `OUTBOUND_PROXY` 访问可信内网资源，需要显式配置 `SSRF_ALLOW_PRIVATE` 并在部署文档中说明风险边界。
+- 验证：`npx.cmd vitest run src/lib/secure-compare.test.ts src/lib/ssrf.test.ts src/lib/http.test.ts src/lib/auth/routes.test.ts src/modules/expenses/import.test.ts src/modules/posts/posts.test.ts` 通过；`npm.cmd run check` 通过。
+
 ### 2026-06-15 · 博客分页与首页统计修复
 - 完成内容：修复公开博客分页非法参数会把 `NaN` 传入 Prisma 的问题，非法 `/blog/page/*` 现在会进入 404；修复首页今日待办查询与 `Todo.date @db.Date` 写入哨兵值不一致导致今天待办被漏掉的问题；首页“今年通关”改为按 Activity 中 `games/finished` 的发生时间统计，避免后续编辑游戏资料污染年度通关数。
 - 关键文件：`src/app/(public)/blog/page/[page]/page.tsx`、`src/modules/posts/utils.ts`、`src/modules/posts/queries.ts`、`src/modules/dashboard/queries.ts`、`src/modules/posts/posts.test.ts`、`src/modules/dashboard/queries.test.ts`。

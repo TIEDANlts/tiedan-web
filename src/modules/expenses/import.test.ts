@@ -178,3 +178,27 @@ describe("expense import executor helpers", () => {
     expect(rows[0].raw).toMatchObject({ 交易订单号: "ALI-EXP-001" });
   });
 });
+
+describe("parseExpenseImportFile column alignment", () => {
+  it("keeps columns aligned when the header row has a blank cell in the middle", () => {
+    // 表头在「收/支」和「金额」之间插入了一个空列，数据行对应位置是占位值 "X"。
+    // 旧实现会用 headers.filter(Boolean) 压缩表头下标，导致金额/订单号整体错位，
+    // 把金额读成 "X" 从而判为错误行；修复后应正确解析。
+    const csv = [
+      "支付宝交易记录明细",
+      "交易时间,收/支,,金额,交易订单号,交易状态",
+      "2026-06-01 08:12:03,支出,X,18.50,ALI-MID-001,交易成功",
+    ].join("\n");
+
+    const result = parseExpenseImportFile(Buffer.from(csv, "utf-8"), "alipay");
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      txnTime: "2026-06-01 08:12:03",
+      direction: "EXPENSE",
+      amount: "18.50",
+      txnNo: "ALI-MID-001",
+    });
+  });
+});

@@ -37,13 +37,23 @@ export function isPublicPath(pathname: string) {
 }
 
 export function safeFromPath(from: string | null) {
-  if (!from?.startsWith("/")) {
+  if (typeof from !== "string") {
     return "/";
   }
 
-  if (from.startsWith("//")) {
+  // 浏览器在解析 URL 前会先剥离 Tab / 换行 / 回车，这里按同样方式清洗，避免用控制字符绕过下面的校验。
+  const cleaned = from.replace(/[\t\n\r]/g, "");
+
+  // 必须是站内绝对路径：以单个 "/" 开头，且第二个字符不是 "/" 或 "\"。
+  // 否则 "//host" 或 "/\host" 会被浏览器解析成协议相对地址，跳转到外部域名（开放重定向）。
+  if (!/^\/(?![/\\])/.test(cleaned)) {
     return "/";
   }
 
-  return from;
+  // 反斜杠在 http(s) URL 解析中等价于 "/"，出现在任意位置都可能逃逸到外部域名，一律拒绝。
+  if (cleaned.includes("\\")) {
+    return "/";
+  }
+
+  return cleaned;
 }
