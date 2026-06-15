@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
+import { expenseImportTitle, recordActivity } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { buildExpenseImportPreview, normalizeImportRowsForCreate } from "@/modules/expenses/import-executor";
 import { detectExpenseImportPlatform, parseExpenseImportFile, type ExpenseImportPlatform } from "@/modules/expenses/parsers";
@@ -35,6 +36,7 @@ async function requireSession() {
 
 function revalidateExpenses() {
   revalidatePath("/expenses");
+  revalidatePath("/");
   revalidatePath("/expenses/import");
   revalidatePath("/expenses/import/history");
   revalidatePath("/admin/expense-categories");
@@ -493,6 +495,10 @@ export async function executeExpenseImportAction(input: {
 
   revalidateExpenses();
   revalidatePath(`/expenses/import/result/${result.batchId}`);
+
+  if (result.inserted > 0) {
+    await recordActivity("expenses", "imported", result.batchId, expenseImportTitle(result.inserted));
+  }
 
   return { ok: true, ...result };
 }

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
+import { recordActivity, shouldRecordStatusTransition, tripDoneTitle } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { gcj02ToWgs84 } from "@/lib/geo";
 import {
@@ -36,6 +37,7 @@ function readDestinations(formData: FormData) {
 function revalidateTrips(id?: string) {
   revalidatePath("/trips");
   revalidatePath("/trips/footprint");
+  revalidatePath("/");
   if (id) {
     revalidatePath(`/trips/${id}`);
   }
@@ -113,8 +115,8 @@ export async function updateTripOverviewAction(_state: TripActionState, formData
     data: input.data,
   });
 
-  if (existing.status !== "DONE" && input.data.status === "DONE") {
-    // TODO(Stage 16): recordActivity({ module: "trips", action: "done", title: input.data.title, href: `/trips/${id}` })
+  if (shouldRecordStatusTransition(existing.status, input.data.status, "DONE")) {
+    await recordActivity("trips", "done", id, tripDoneTitle(input.data.title));
   }
 
   revalidateTrips(id);

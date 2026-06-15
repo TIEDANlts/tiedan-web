@@ -2,12 +2,20 @@
 
 ## 当前状态
 - 进行中：（无）
-- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9、Stage 10、Stage 11、Stage 12、Stage 13、Stage 14、Stage 15
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9、Stage 10、Stage 11、Stage 12、Stage 13、Stage 14、Stage 15、Stage 16
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 16 · 首页聚合与活动时间线（收官） —— 2026-06-15 完成
+- 完成内容：新增 `Activity` 数据模型、迁移和 `src/lib/activity.ts`，在游戏通关、书影读完/看完、文章首次发布、旅行完成和账单导入完成时记录活动；匿名 `/` 改为编辑部公开首页，读取 `profile.name`、`profile.bio`、`profile.avatar` 并展示最新 3 篇文章；登录后 `/` 改为收藏册仪表盘，包含今日待办、本月消费、最近在玩、在读在看、下一段旅行、未来 14 天重要日子、今年数字和活动时间线；`/admin/settings` 支持编辑首页资料、上传 public 头像和导出全站数据；新增 PWA manifest/icons、apple-touch-icon、全站 404/error 页和统一 title 模板；删除 `/admin/playground`。
+- 关键文件：`prisma/schema.prisma` 与 `prisma/migrations/20260615120240_add_activity/migration.sql` 定义活动流；`src/lib/activity.ts`、`src/lib/export-zip.ts`、`src/modules/dashboard/queries.ts` 分别封装活动记录/时间线、JSON zip 和仪表盘聚合查询；`src/app/page.tsx`、`src/app/dashboard-widgets.tsx`、`src/app/(private)/admin/settings/*` 实现首页、仪表盘与设置页；`src/app/api/admin/export/route.ts` 实现私有数据导出；`public/manifest.webmanifest`、`public/icons/*`、`public/apple-touch-icon.png` 接入 PWA 图标。
+- 关键决定与偏离：未新增第三方依赖，导出 zip 使用内部无压缩 ZIP writer；创建游戏/书影/旅行时若初始状态已经是目标状态不记录活动，仅记录已有条目从其他状态变为目标状态；文章发布活动按文章 id 去重并在时间线解析到当前 slug，撤回后改 slug 再发布不会重复记录；账单导入仅在实际新增 `inserted > 0` 时记录，避免“导入了 0 笔账单”；PWA 不实现 Service Worker，仅提供 manifest、图标与 theme-color。
+- Stage 16 验收：通过 - 匿名 `/` 与登录 `/` 走不同外壳和内容；通过 - 仪表盘小部件为独立 Server Component，今日待办可直接勾选并 revalidate `/`；通过 - 目标动作接入活动记录且重复保存目标状态不重复记录；通过 - 设置页可保存首页资料，头像走 public 上传接口；通过 - `/api/admin/export` 私有导出 JSON zip，manifest 记录各表条数且图片不打包；通过 - PWA manifest、192/512 图标和 apple-touch-icon 已生成；通过 - 全站 404/error 页和 title 模板已接入；通过 - `/admin/playground` 路由已删除；待人工验收 - 375px 真实浏览器下仪表盘单列顺序、头像上传体验、手机添加到主屏幕、导出 zip 手动解压阅读和时间线跳转需用户登录后点验。
+- 遗留 TODO：真实上线前仍需完成生产域名、HTTPS、对象存储加密备份和恢复演练；如未来需要把待办完成或重要日子创建也纳入活动流，可继续调用 `recordActivity()` 扩展。
+- 验证：`npm.cmd run check` ✅（36 个测试文件、150 条通过）；`npm.cmd run e2e` ✅（3 条通过，Playwright 现在会自动启动 `127.0.0.1:3000` dev server；验证过程中曾因未启动站点和 `localhost` 解析到 IPv6 `::1` 失败，已改为稳定的 webServer 配置后重跑通过）；`wsl.exe -d Ubuntu-24.04 -u root -- sh -lc "... docker compose -f docker-compose.dev.yml up -d"` ✅；`npx.cmd prisma migrate dev --name add_activity` ✅；`npx.cmd prisma generate` ✅；`npx.cmd vitest run src/lib/activity-actions.test.ts src/lib/activity.test.ts` ✅（2 个测试文件、11 条通过）；`npx.cmd vitest run src/lib/activity.test.ts src/lib/export-zip.test.ts src/modules/settings/settings.test.ts` ✅（3 个测试文件、6 条通过）；`npx.cmd tsc --noEmit` ✅；`npm.cmd run lint` ✅；`npx.cmd vitest run` ✅（36 个测试文件、150 条通过）。
 
 ### Stage 15 · 全局日历 —— 2026-06-15 完成
 - 完成内容：新增 `SpecialDay` 数据模型与迁移 SQL；新增 `src/lib/calendar.ts` 统一 `CalendarEvent` 类型和跨模块聚合；待办、旅行、重要日子、书影模块分别实现 `getEvents(start, end)`；新增 `/api/calendar/events` 私密事件接口；替换 `/calendar` 占位页为 FullCalendar 日历，中文 locale、周一开头、桌面月视图、小屏列表视图、模块图例显隐、事件跳转和点击空白日期快捷新建待办 / 重要日子。

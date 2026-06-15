@@ -219,3 +219,14 @@ model TripDay {
 
   @@unique([tripId, date])
 }
+
+model Activity {
+  id         String   @id @default(cuid())
+  module     String
+  action     String
+  refId      String
+  title      String
+  happenedAt DateTime @default(now())
+
+  @@index([happenedAt])
+}

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
+import { mediaDoneTitle, recordActivity, shouldRecordStatusTransition } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { formatShanghaiDate } from "@/lib/dayjs";
 import { saveFromUrl } from "@/lib/storage";
@@ -115,6 +116,7 @@ function doneWithoutRatingWarning(type: MediaTypeValue, status: MediaStatusValue
 
 function revalidateMedia(id?: string) {
   revalidatePath("/media");
+  revalidatePath("/");
   if (id) {
     revalidatePath(`/media/${id}`);
   }
@@ -210,6 +212,10 @@ export async function updateMediaItemAction(
     },
   });
 
+  if (shouldRecordStatusTransition(existing.status, item.status, "DONE")) {
+    await recordActivity("media", "done", item.id, mediaDoneTitle(item.type, item.title));
+  }
+
   revalidateMedia(item.id);
 
   return {
@@ -227,6 +233,7 @@ export async function advanceMediaStatusAction(id: string) {
     where: { id },
     select: {
       type: true,
+      title: true,
       status: true,
       rating: true,
       startedAt: true,
@@ -256,6 +263,10 @@ export async function advanceMediaStatusAction(id: string) {
       ...statusDates,
     },
   });
+
+  if (shouldRecordStatusTransition(item.status, nextStatus, "DONE")) {
+    await recordActivity("media", "done", id, mediaDoneTitle(item.type, item.title));
+  }
 
   revalidateMedia(id);
 

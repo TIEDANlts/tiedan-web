@@ -22,6 +22,7 @@ async function requireSession() {
 
 function revalidateTodos() {
   revalidatePath("/todos");
+  revalidatePath("/");
 }
 
 function readString(value: FormDataEntryValue | null) {

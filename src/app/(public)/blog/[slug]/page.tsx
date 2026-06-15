@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   }
 
   return {
-    title: `${data.post.title} · 铁蛋的博客`,
+    title: data.post.title,
     description: data.post.summary ?? undefined,
   };
 }

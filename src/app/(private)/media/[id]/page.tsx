@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   }
 
   return {
-    title: `${item.title} · 书影收藏册`,
+    title: item.title,
   };
 }
 
