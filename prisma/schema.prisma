@@ -101,6 +101,20 @@ model Todo {
   createdAt DateTime  @default(now())
 }
 
+model SpecialDay {
+  id           String   @id @default(cuid())
+  title        String
+  date         DateTime @db.Date
+  yearlyRepeat Boolean  @default(true)
+  icon         String?
+  note         String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([date])
+  @@index([yearlyRepeat])
+}
+
 enum PostStatus {
   DRAFT
   PUBLISHED

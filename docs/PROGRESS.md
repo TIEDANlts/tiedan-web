@@ -2,12 +2,20 @@
 
 ## 当前状态
 - 进行中：（无）
-- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9、Stage 10、Stage 11、Stage 12、Stage 13、Stage 14
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9、Stage 10、Stage 11、Stage 12、Stage 13、Stage 14、Stage 15
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 15 · 全局日历 —— 2026-06-15 完成
+- 完成内容：新增 `SpecialDay` 数据模型与迁移 SQL；新增 `src/lib/calendar.ts` 统一 `CalendarEvent` 类型和跨模块聚合；待办、旅行、重要日子、书影模块分别实现 `getEvents(start, end)`；新增 `/api/calendar/events` 私密事件接口；替换 `/calendar` 占位页为 FullCalendar 日历，中文 locale、周一开头、桌面月视图、小屏列表视图、模块图例显隐、事件跳转和点击空白日期快捷新建待办 / 重要日子。
+- 关键文件：`prisma/schema.prisma` 与 `prisma/migrations/20260615085002_add_special_days/migration.sql` 定义重要日子表；`src/lib/calendar.ts` 与 `src/modules/*/events.ts` 负责事件聚合；`src/modules/special-days/actions.ts`、`src/modules/special-days/special-day-quick-form.tsx` 提供日历内重要日子创建；`src/app/api/calendar/events/route.ts` 提供登录态事件 API；`src/app/(private)/calendar/*` 实现动态导入和日历交互；`src/app/globals.css` 增加 FullCalendar 局部主题样式。
+- 关键决定与偏离：新增并锁定 `@fullcalendar/core@6.1.20`、`@fullcalendar/react@6.1.20`、`@fullcalendar/daygrid@6.1.20`、`@fullcalendar/list@6.1.20`、`@fullcalendar/interaction@6.1.20`；重要日子本轮只支持在 `/calendar` 内新建，不新增独立管理页；书影事件标题按本轮 prompt 使用「《xxx》上映」，未区分图书出版日文案；点击空白日期通过 Dialog 内分段按钮在“新建待办 / 新建重要日子”之间切换。
+- Stage 15 验收：通过 - 四类事件均接入聚合接口，配色来自 `src/lib/design.ts` 模块色，图例可单独隐藏并写入 localStorage；通过 - 旅行事件使用 FullCalendar 排他 end，跨月行程单测覆盖；通过 - 每年重复的重要日子按查询年份展开，跨年区间、2/29 平年顺延、闰年正常出现和一次性事件不重复均有单测覆盖；通过 - 点击事件使用 `href` 跳转，点击空白日期可快捷添加待办或重要日子；通过 - 小屏初始视图为 `listWeek`，月视图 `dayMaxEvents=3` 且 `moreLinkContent` 显示 `+n`；待人工验收 - 375px 真实浏览器下列表默认视图、月视图 `+n` 折叠、快捷新建提交后的体验和事件跳转需要用户登录后点验。
+- 遗留 TODO：后续如需要管理重要日子的编辑 / 删除，可在 `/calendar` 或设置页补独立管理入口；Stage 16 活动流接入时，本轮新增重要日子和待办快捷创建可按需求补 `recordActivity()`。
+- 验证：`wsl.exe -d Ubuntu-24.04 -u root -- sh -lc "... docker compose -f docker-compose.dev.yml up -d"` ✅；`npx.cmd prisma migrate dev --name add_special_days` ✅（同时应用了本地未应用的 Stage 14 迁移）；`npx.cmd prisma generate` ✅；`npx.cmd vitest run src/modules/special-days/special-days.test.ts src/modules/todos/events.test.ts src/modules/trips/events.test.ts src/modules/media/events.test.ts src/lib/calendar.test.ts` ✅（5 个测试文件、8 条通过）；`npx.cmd tsc --noEmit` ✅；`npm.cmd run lint` ✅；`npm.cmd run check` ✅（32 个测试文件、136 条通过）；`npm.cmd run dev` ✅（Next dev server Ready）；浏览器点验因当前 Codex Browser 企业网络策略阻止访问 `localhost:3000` 未完成，需用户在本机浏览器登录后复核。
 
 ### Stage 14 · 旅行模块 —— 2026-06-15 完成
 - 完成内容：新增 `Trip` / `TripDay` 数据模型与迁移 SQL；实现私密文件读取 `/api/files/private/**`，登录校验后从 private 上传区流式返回文件并防路径穿越；新增 `src/lib/map.ts`，配置天地图 `vec_w` + `cva_w` 双瓦片层，缺少 `TIANDITU_KEY` 时回退 OSM；新增 `src/lib/geo.ts` 的 GCJ-02 → WGS-84 近似转换；实现 `/trips` 旅行收藏册、`/trips/[id]` 行程详情编辑、Nominatim 服务端代理搜索、private 照片九宫格和 `/trips/footprint` 足迹地图。
