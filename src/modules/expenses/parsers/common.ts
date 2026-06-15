@@ -60,7 +60,17 @@ function findHeaderIndex(rows: string[][]) {
 }
 
 function rowToObject(headers: string[], row: string[]) {
-  return Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""]));
+  // 关键：按表头的「原始下标」对齐数据列。空表头单元格直接跳过，
+  // 但不能压缩下标——否则空列后面的所有字段都会读到错位的数据列。
+  const entries: [string, string][] = [];
+
+  headers.forEach((header, index) => {
+    if (header) {
+      entries.push([header, row[index] ?? ""]);
+    }
+  });
+
+  return Object.fromEntries(entries);
 }
 
 function readRequired(raw: Record<string, string>, header: string) {
@@ -176,7 +186,8 @@ export function parseExpenseCsv(buffer: Buffer, options: ExpenseImportParserOpti
     };
   }
 
-  const headers = rows[headerIndex].filter(Boolean);
+  // 保留完整表头行（含空单元格），交由 rowToObject 按原始下标对齐并跳过空表头。
+  const headers = rows[headerIndex];
   for (const [index, row] of rows.slice(headerIndex + 1).entries()) {
     const rowNumber = headerIndex + index + 2;
 

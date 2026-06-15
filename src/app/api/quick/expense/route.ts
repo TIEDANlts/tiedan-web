@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db } from "@/lib/db";
+import { extractBearerToken, secureTokenEqual } from "@/lib/secure-compare";
 import { buildQuickExpenseCreateData, parseQuickExpenseText, quickExpenseRateLimiter } from "@/modules/expenses/quick";
 
 function json(data: unknown, status: number) {
@@ -13,9 +14,8 @@ export async function POST(request: NextRequest) {
     return json({ ok: false, message: "快捷记账接口未启用。" }, 404);
   }
 
-  const authorization = request.headers.get("authorization") ?? "";
-  const token = authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : "";
-  if (!token || token !== configuredToken) {
+  const token = extractBearerToken(request.headers.get("authorization"));
+  if (!token || !secureTokenEqual(token, configuredToken)) {
     return json({ ok: false, message: "快捷记账 token 不正确。" }, 401);
   }
 

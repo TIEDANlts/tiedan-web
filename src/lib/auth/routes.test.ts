@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPublicPath } from "./routes";
+import { isPublicPath, safeFromPath } from "./routes";
 
 describe("isPublicPath", () => {
   it.each([
@@ -29,4 +29,29 @@ describe("isPublicPath", () => {
       expect(isPublicPath(path)).toBe(false);
     },
   );
+});
+
+describe("safeFromPath", () => {
+  it.each(["/todos", "/blog/stage-1", "/expenses?month=2026-06", "/"])(
+    "keeps in-site absolute path %s",
+    (path) => {
+      expect(safeFromPath(path)).toBe(path);
+    },
+  );
+
+  it.each([
+    null,
+    "",
+    "https://evil.com",
+    "evil.com",
+    "//evil.com",
+    "/\\evil.com",
+    "/\\/evil.com",
+    "\\/evil.com",
+    "/path\\to\\evil",
+    "/\t/evil.com",
+    "/\n//evil.com",
+  ])("rejects unsafe redirect target %j", (path) => {
+    expect(safeFromPath(path as string | null)).toBe("/");
+  });
 });
