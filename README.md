@@ -3,6 +3,7 @@
 单用户个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
 
 当前进度：Stage 13 已完成消费报表与快捷记账入口；Stage 0-12 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 13 已接入月 / 周 / 年报表、ECharts 图表容器、快捷记账 Bearer Token API 和配置文档。
+当前分支正在实现 Stage 14 旅行模块：行程、按天地点/照片、私密照片读取、天地图/OSM 地图与足迹页。
 
 ## 本地环境
 
@@ -20,6 +21,7 @@
   - `TMDB_API_KEY`（Stage 10 电影 / 剧集搜索补全，可选；失败会回退 NeoDB）
   - `CRON_SECRET`（Stage 8 定时同步接口 Bearer token）
   - `QUICK_ADD_TOKEN`（Stage 13 快捷记账 Bearer token；未配置则接口返回 404）
+  - `TIANDITU_KEY`（Stage 14 旅行地图瓦片；未配置时回退 OSM 标准瓦片）
   - `HEALTHCHECKS_STEAM_URL`（可选；Stage 8 Steam 同步心跳）
   - `ICP_BEIAN_NO` / `GONGAN_BEIAN_NO`（可选；配置后公开页脚展示备案信息）
   - `BASE_URL`（e2e 使用；本地可用 `http://localhost:3000`）
@@ -127,6 +129,8 @@ Stage 12 未新增第三方依赖；复用 `xlsx@0.18.5` 与 `iconv-lite@0.7.2`�
 
 Stage 13 新增图表依赖：`echarts@6.1.0`、`echarts-for-react@3.0.6`。`/expenses/stats` 提供月 / 周 / 年消费报表；`POST /api/quick/expense` 使用 `Authorization: Bearer ${QUICK_ADD_TOKEN}` 快捷记账，配置方法见 `docs/QUICK_ADD.md`。
 
+Stage 14 新增地图依赖：`leaflet@1.9.4`、`react-leaflet@5.0.0`、`@types/leaflet@1.9.21`。`/trips` 是旅行行程列表，`/trips/[id]` 支持按天维护地点、笔记和私密照片，`/trips/footprint` 展示已完成行程足迹；私密照片通过 `/api/files/private/**` 登录鉴权读取。
+
 生产 Compose 配置检查（通过 WSL Docker）：
 
 ```powershell
@@ -151,6 +155,9 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 消费流水：`/expenses` 是私密消费流水页，支持月份左右切换、日期 / 方向 / 分类 / 平台 / 关键词组合筛选，按日期倒序分组，日支出小计只统计支出；支出金额使用消费模块色，收入使用绿色模块色，不计收支显示弱色。
 - 消费报表：`/expenses/stats` 提供月 / 周 / 年视图；月视图包含本月支出、环比、收入、结余、分类占比、每日支出、Top 10 商户和分类明细；周视图比较本周 / 上周并按最近 8 周计算星期平均；年视图展示 12 个月支出趋势与收入虚线、年度分类占比和年度总览。
 - 快捷记账：`POST /api/quick/expense` 使用独立 Bearer Token，解析“咖啡 35”这类文本末尾金额，写入 `platform=quick` 支出流水并自动分类；同一 token 每分钟最多 10 次，未配置 `QUICK_ADD_TOKEN` 时接口禁用。
+- 旅行：`/trips` 是私密旅行收藏册，支持计划中 / 已完成 Tab、新建行程、封面、目的地标签和旅行模块色统计徽章；创建时按日期范围自动生成每天的 `TripDay`。
+- 旅行详情：`/trips/[id]` 提供大封面、基础信息、Markdown 总结、预算、计划中行前清单、按天地点/笔记/照片九宫格和 Leaflet 地图；照片上传到 private 区，缩略图用于九宫格，原图点击打开。
+- 地图与足迹：地图瓦片优先使用天地图 `vec_w` + `cva_w`，无 `TIANDITU_KEY` 时回退 OSM；地点搜索通过服务端 Nominatim 代理并限频，手动坐标可勾选“来自国内地图”做 GCJ-02 到 WGS-84 转换；`/trips/footprint` 聚合已完成行程地点。
 - 手动记账：`/expenses` 顶部和移动端底部提供“记一笔”入口；表单使用大号金额输入、支出 / 收入切换、按方向过滤的分类宫格、默认今天日期、商户和备注字段，手动流水固定写入 `platform=manual`、`txnNo=null`；未手选分类时会复用导入分类规则尝试自动分类。
 - 账单导入：`/expenses/import` 支持微信 / 支付宝 CSV 上传、平台自动识别、预览统计和确认导入；支付宝 CSV 按 GBK 自动解码，微信金额会剥离 `¥` 前缀，重复交易按 `[platform, txnNo]` 跳过，导入批次写入 `ImportBatch` 并可在 `/expenses/import/history` 查看。
 - 分类规则沉淀：流水页行内修改分类时，如果该交易有商户名，会询问是否以后把该商户归到所选分类；确认后会把商户名追加进该分类 keywords。

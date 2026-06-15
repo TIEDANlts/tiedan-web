@@ -2,12 +2,20 @@
 
 ## 当前状态
 - 进行中：（无）
-- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9、Stage 10、Stage 11、Stage 12、Stage 13
+- 已完成：Stage 0、Stage 1、Stage 2、Stage 3、Stage 4、Stage 5、Stage 6A（本地生产化准备）、Stage 7、Stage 8、Stage 9、Stage 10、Stage 11、Stage 12、Stage 13、Stage 14
 - 线上版本：（未上线）
 
 ---
 
 ## Stage 日志（倒序追加）
+
+### Stage 14 · 旅行模块 —— 2026-06-15 完成
+- 完成内容：新增 `Trip` / `TripDay` 数据模型与迁移 SQL；实现私密文件读取 `/api/files/private/**`，登录校验后从 private 上传区流式返回文件并防路径穿越；新增 `src/lib/map.ts`，配置天地图 `vec_w` + `cva_w` 双瓦片层，缺少 `TIANDITU_KEY` 时回退 OSM；新增 `src/lib/geo.ts` 的 GCJ-02 → WGS-84 近似转换；实现 `/trips` 旅行收藏册、`/trips/[id]` 行程详情编辑、Nominatim 服务端代理搜索、private 照片九宫格和 `/trips/footprint` 足迹地图。
+- 关键文件：`prisma/schema.prisma` 与 `prisma/migrations/20260615160800_add_trips/migration.sql` 定义旅行表；`src/lib/storage.ts`、`src/app/api/files/private/[...path]/route.ts` 管理 private 文件读取；`src/lib/map.ts`、`src/lib/geo.ts` 管理地图瓦片与坐标转换；`src/modules/trips/*` 封装旅行查询、Server Actions、Nominatim 限频搜索与纯逻辑；`src/app/(private)/trips/*` 实现列表、详情、动态 Leaflet 地图和足迹页。
+- 关键决定与偏离：新增并锁定 `leaflet@1.9.4`、`react-leaflet@5.0.0`、`@types/leaflet@1.9.21`；天地图官方站点在当前网络环境下不可达，已按天地图常用 DataServer 模板实现 `https://t{s}.tianditu.gov.cn/DataServer?T=vec_w|cva_w&x={x}&y={y}&l={z}&tk=...`，子域为 `0-7`，后续上线前建议用真实 key 在浏览器网络面板复核；因 Windows 侧无法连通 WSL Docker PostgreSQL，本地未能执行 `prisma migrate dev` 应用迁移，迁移 SQL 已手写并提交。
+- Stage 14 验收：通过 - 新建行程 action 会按起止日期生成 `TripDay`，日期展开和天数计算有单测覆盖；通过 - 地点可搜索或手动添加，勾选国内地图坐标时通过 GCJ-02 → WGS-84 转换后入库；通过 - private 上传 URL 已改为 `/api/files/private/**`，未登录读取返回 403，路径穿越由 `assertPrivateUploadPath` 阻止；通过 - 地图组件使用动态导入关闭 SSR，瓦片配置集中在 `src/lib/map.ts`；通过 - 足迹页聚合 DONE 行程地点并按地点名去重；待人工验收 - 真实 `TIANDITU_KEY` 下天地图中文瓦片加载、Nominatim 实网搜索、照片上传网络体积和 375px 移动端体验需要在本地浏览器点验；因环境阻塞未验证 - `prisma migrate status` / 实际数据库迁移应用。
+- 遗留 TODO：Stage 16 接入活动流时，在 `updateTripOverviewAction` 中状态从非 `DONE` 变为 `DONE` 的 TODO 位置调用 `recordActivity()`；当前 `TripDay.locations` 仍按 PLAN 使用 JSON，后续若做城市维度高级统计可实体化 Location；修复本机 WSL Docker 端口转发后运行 `npx.cmd prisma migrate dev --name add_trips` 或 `npx.cmd prisma migrate deploy` 应用迁移并重跑手工验收。
+- 验证：`npx.cmd vitest run src/lib/geo.test.ts src/lib/map.test.ts src/lib/storage.test.ts src/modules/trips/trips.test.ts src/modules/trips/nominatim.test.ts` ✅（5 个测试文件，21 条通过）；`npx.cmd tsc --noEmit` ✅；`npm.cmd run lint` ✅；`npm.cmd run check` ✅（27 个测试文件，128 条通过）；`npx.cmd prisma generate` ✅；`npx.cmd prisma migrate status` ❌（Schema engine error，Windows 侧 `localhost:5432` / `127.0.0.1:5432` TCP 不通，WSL Docker 端口转发阻塞）。
 
 ### Stage 13 · 消费报表 + 快捷记账入口 —— 2026-06-15 完成
 - 完成内容：新增 `/expenses/stats` 私密消费报表页，支持月 / 周 / 年视图和 URL 周期参数；月视图展示本月支出、环比、收入、结余、分类占比、每日支出、Top 10 商户和分类明细；周视图展示本周 / 上周按日对比，并按最近 8 周计算星期几平均支出；年视图展示 12 个月支出趋势、收入虚线、年度分类占比和年度总览；新增 `POST /api/quick/expense` 快捷记账接口，使用 `QUICK_ADD_TOKEN` Bearer Token、内存级每分钟 10 次限频、末尾金额解析和自动分类写入 `platform=quick` 流水。

@@ -355,6 +355,7 @@ Vitest（单测）+ Playwright（冒烟）。
 | undici | 6.26.0 | Stage 5 统一出站 HTTP 与 OUTBOUND_PROXY |
 | xlsx / iconv-lite | 0.18.5 / 0.7.2 | Stage 10 书影 XLSX 解析与 GBK CSV 解码 |
 | echarts / echarts-for-react | 6.1.0 / 3.0.6 | Stage 13 消费报表图表 |
+| leaflet / react-leaflet / @types/leaflet | 1.9.4 / 5.0.0 / 1.9.21 | Stage 14 旅行地图与足迹图 |
 
 - 根目录 `.npmrc` 已含 `save-exact=true`；新增任何依赖先在回复中说明用途与版本，并登记到本表。
 - 禁止擅自升级大版本；遇到"教程写法与装的版本对不上"，以装的版本的官方文档为准。

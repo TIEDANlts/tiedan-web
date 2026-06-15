@@ -128,6 +128,19 @@ export function assertPublicUploadPath(parts: string[]) {
   return target;
 }
 
+export function getPrivateUploadRoot() {
+  return getAreaRoot("private");
+}
+
+export function assertPrivateUploadPath(parts: string[]) {
+  const privateRoot = getPrivateUploadRoot();
+  const target = path.resolve(privateRoot, ...parts);
+
+  assertInsideRoot(privateRoot, target);
+
+  return target;
+}
+
 export function detectImageType(contentType?: string | null, filename?: string | null) {
   const normalized = normalizedContentType(contentType) ?? contentTypeFromFilename(filename);
 
@@ -197,7 +210,7 @@ export async function save(buffer: Buffer, options: SaveOptions): Promise<SaveRe
     };
   }
 
-  const prefix = safeSubdir ? `/private-uploads/${safeSubdir}` : "/private-uploads";
+  const prefix = safeSubdir ? `/api/files/private/${safeSubdir}` : "/api/files/private";
 
   return {
     url: `${prefix}/${filename}`,
