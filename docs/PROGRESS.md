@@ -7,6 +7,15 @@
 
 ---
 
+## 修复日志
+
+### 2026-06-15 · Server Action 初始状态导出修复
+- 完成内容：修复费用页和设置页在 Next.js 16.2.9 / Turbopack 下因 `"use server"` 文件导出普通对象导致的运行时报错，并避免客户端 `useState` 在 render 阶段误触发 Server Action 引用。
+- 关键文件：`src/modules/expenses/action-state.ts`、`src/modules/settings/action-state.ts`、`src/modules/expenses/actions.ts`、`src/modules/settings/actions.ts`、`src/app/(private)/expenses/expenses-ledger.tsx`、`src/app/(private)/admin/expense-categories/expense-categories-admin.tsx`、`src/app/(private)/admin/settings/settings-form.tsx`、`src/lib/server-action-exports.test.ts`。
+- 验证：`npx.cmd vitest run src/lib/server-action-exports.test.ts` 通过；`npx.cmd vitest run src/modules/expenses/expenses.test.ts src/modules/settings/settings.test.ts src/lib/server-action-exports.test.ts` 通过；`npx.cmd tsc --noEmit` 通过；`npm.cmd run check` 通过。
+
+---
+
 ## Stage 日志（倒序追加）
 
 ### Stage 16 · 首页聚合与活动时间线（收官） —— 2026-06-15 完成
