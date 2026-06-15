@@ -18,6 +18,7 @@ export type DirectionFilter = "ALL" | TxnDirectionValue;
 
 export type ExpenseFilters = {
   month: string;
+  date: string;
   direction: DirectionFilter;
   categoryId: string;
   platform: string;
@@ -78,6 +79,7 @@ function stringValue(value: unknown) {
 export function defaultExpenseFilters(month = toShanghaiTime().format("YYYY-MM")): ExpenseFilters {
   return {
     month,
+    date: "",
     direction: "ALL",
     categoryId: "",
     platform: "",
@@ -108,10 +110,13 @@ export function parseExpenseFilters(
 ): ExpenseFilters {
   const fallbackMonth = toShanghaiTime(now).format("YYYY-MM");
   const month = firstParamValue(params.month)?.trim() ?? "";
+  const date = firstParamValue(params.date)?.trim() ?? "";
   const direction = firstParamValue(params.direction)?.trim() ?? "";
+  const parsedDate = parseDate(date);
 
   return {
     month: isValidMonth(month) ? month : fallbackMonth,
+    date: parsedDate ? date : "",
     direction: isTxnDirection(direction) ? direction : "ALL",
     categoryId: firstParamValue(params.category)?.trim() ?? "",
     platform: firstParamValue(params.platform)?.trim() ?? "",
@@ -125,6 +130,15 @@ export function monthRange(month: string) {
   return {
     start: start.toDate(),
     end: start.add(1, "month").toDate(),
+  };
+}
+
+export function dayRange(date: string) {
+  const start = dayjs.tz(`${date}T00:00:00`, SHANGHAI_TIMEZONE);
+
+  return {
+    start: start.toDate(),
+    end: start.add(1, "day").toDate(),
   };
 }
 

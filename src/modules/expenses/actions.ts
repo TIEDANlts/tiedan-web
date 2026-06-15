@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { buildExpenseImportPreview, normalizeImportRowsForCreate } from "@/modules/expenses/import-executor";
 import { detectExpenseImportPlatform, parseExpenseImportFile, type ExpenseImportPlatform } from "@/modules/expenses/parsers";
 import { categorizeExpenseTransaction } from "@/modules/expenses/categorize";
+import { getExpenseCategoriesForCategorize, getExpenseCategoryOptions } from "@/modules/expenses/category-options";
 import {
   isManualDirection,
   normalizeManualTransactionInput,
@@ -51,31 +52,6 @@ function readKeywords(formData: FormData) {
         .map((keyword) => keyword.trim())
         .filter(Boolean),
     ),
-  );
-}
-
-async function categoryOptions() {
-  const categories = await db.expenseCategory.findMany({
-    select: { id: true, name: true, direction: true },
-  });
-
-  return categories.flatMap((category) =>
-    category.direction === "EXPENSE" || category.direction === "INCOME"
-      ? [{ ...category, direction: category.direction as ManualDirectionValue }]
-      : [],
-  );
-}
-
-async function categoriesForCategorize() {
-  const categories = await db.expenseCategory.findMany({
-    select: { id: true, name: true, direction: true, keywords: true, sort: true },
-    orderBy: [{ sort: "asc" }, { name: "asc" }],
-  });
-
-  return categories.flatMap((category) =>
-    category.direction === "EXPENSE" || category.direction === "INCOME"
-      ? [{ ...category, direction: category.direction }]
-      : [],
   );
 }
 
@@ -140,7 +116,7 @@ export async function createManualTransactionAction(
       merchant: formData.get("merchant"),
       note: formData.get("note"),
     },
-    await categoryOptions(),
+    await getExpenseCategoryOptions(),
   );
 
   if (!normalized.ok) {
@@ -155,7 +131,7 @@ export async function createManualTransactionAction(
         item: normalized.data.note,
         sourceCategory: null,
       },
-      await categoriesForCategorize(),
+      await getExpenseCategoriesForCategorize(),
     );
   }
 
@@ -456,7 +432,7 @@ export async function previewExpenseImportAction(input: {
 
   const parsed = parseExpenseImportFile(decodePayload(input.payload), input.platform);
   const existing = await existingTxnNos(input.platform, parsed.rows.map((row) => row.txnNo));
-  const preview = buildExpenseImportPreview(parsed, await categoriesForCategorize(), existing);
+  const preview = buildExpenseImportPreview(parsed, await getExpenseCategoriesForCategorize(), existing);
 
   return {
     ok: true,
@@ -483,7 +459,7 @@ export async function executeExpenseImportAction(input: {
 
   const parsed = parseExpenseImportFile(decodePayload(input.payload), input.platform);
   const existingBefore = await existingTxnNos(input.platform, parsed.rows.map((row) => row.txnNo));
-  const categories = await categoriesForCategorize();
+  const categories = await getExpenseCategoriesForCategorize();
 
   const result = await db.$transaction(async (tx) => {
     const batch = await tx.importBatch.create({
