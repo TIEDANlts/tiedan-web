@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
+import { gameFinishedTitle, recordActivity, shouldRecordStatusTransition } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { saveFromUrl } from "@/lib/storage";
 import {
@@ -82,6 +83,7 @@ function finishedWithoutRatingWarning(status: GameStatusValue, rating: number | 
 
 function revalidateGames() {
   revalidatePath("/games");
+  revalidatePath("/");
 }
 
 export async function createGameAction(
@@ -142,7 +144,7 @@ export async function updateGameAction(
 
   const existing = await db.game.findUnique({
     where: { id },
-    select: { id: true },
+    select: { id: true, status: true },
   });
 
   if (!existing) {
@@ -168,6 +170,10 @@ export async function updateGameAction(
     },
   });
 
+  if (shouldRecordStatusTransition(existing.status, game.status, "FINISHED")) {
+    await recordActivity("games", "finished", game.id, gameFinishedTitle(game.name));
+  }
+
   revalidateGames();
 
   return {
@@ -183,7 +189,7 @@ export async function advanceGameStatusAction(id: string) {
 
   const game = await db.game.findUnique({
     where: { id },
-    select: { status: true, rating: true },
+    select: { name: true, status: true, rating: true },
   });
 
   if (!game) {
@@ -199,6 +205,10 @@ export async function advanceGameStatusAction(id: string) {
     where: { id },
     data: { status: nextStatus },
   });
+
+  if (shouldRecordStatusTransition(game.status, nextStatus, "FINISHED")) {
+    await recordActivity("games", "finished", id, gameFinishedTitle(game.name));
+  }
 
   revalidateGames();
 

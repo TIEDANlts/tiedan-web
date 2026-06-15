@@ -2,7 +2,7 @@
 
 单用户个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
 
-当前进度：Stage 15 已完成全局日历；Stage 0-14 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 15 已接入 FullCalendar、跨模块事件聚合、重要日子模型与日历内快捷新建。
+当前进度：Stage 16 已完成首页聚合与活动时间线，网站第一个完整版本已收官；Stage 0-15 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 16 已接入公开首页、私密仪表盘、活动流、PWA 清单、全站数据导出和 404/error 收尾页。
 
 ## 本地环境
 
@@ -23,7 +23,7 @@
   - `TIANDITU_KEY`（Stage 14 旅行地图瓦片；未配置时回退 OSM 标准瓦片）
   - `HEALTHCHECKS_STEAM_URL`（可选；Stage 8 Steam 同步心跳）
   - `ICP_BEIAN_NO` / `GONGAN_BEIAN_NO`（可选；配置后公开页脚展示备案信息）
-  - `BASE_URL`（e2e 使用；本地可用 `http://localhost:3000`）
+  - `BASE_URL`（e2e 使用；本地建议用 `http://127.0.0.1:3000`，避免 Windows 上 `localhost` 优先解析到未监听的 IPv6 `::1`）
 
 `AUTH_SECRET` 应使用随机值，例如：
 
@@ -84,7 +84,7 @@ npx.cmd prisma migrate status
 npm.cmd run db:seed
 ```
 
-`npm.cmd run check` 包含 TypeScript 类型检查、ESLint 和 Vitest。`npm.cmd run e2e` 使用 Playwright，需要先启动站点并配置 `BASE_URL`、`ADMIN_USERNAME`、`ADMIN_PASSWORD`。
+`npm.cmd run check` 包含 TypeScript 类型检查、ESLint 和 Vitest。`npm.cmd run e2e` 使用 Playwright，会自动启动 Next dev server；需要配置 `ADMIN_USERNAME`、`ADMIN_PASSWORD`，如覆盖 `BASE_URL`，本地建议使用 `http://127.0.0.1:3000`。
 
 Stage 2 新增 Markdown 渲染依赖：`react-markdown@10.1.0`、`remark-gfm@4.0.1`、`rehype-pretty-code@0.14.3`、`shiki@4.2.0`。
 
@@ -139,6 +139,15 @@ npx.cmd prisma generate
 
 `/calendar` 会聚合待办、旅行、重要日子和书影上映日；桌面默认月视图，手机默认列表视图，模块图例显隐偏好保存在浏览器 localStorage。
 
+Stage 16 未新增第三方依赖；新增数据库迁移 `20260615120240_add_activity`。本地更新数据库时运行：
+
+```powershell
+npx.cmd prisma migrate dev
+npx.cmd prisma generate
+```
+
+`/` 未登录时展示公开编辑部门面，登录后展示收藏册仪表盘；`/admin/settings` 可编辑首页头像、名字和简介，并可导出全站 JSON zip；PWA 清单与图标已接入，但没有 Service Worker。
+
 生产 Compose 配置检查（通过 WSL Docker）：
 
 ```powershell
@@ -148,10 +157,12 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 ## 当前功能
 
 - 公开路由：`/login`、`/`、`/blog/**`、`/nav`、`/rss.xml`、`/uploads/**`、`/api/auth/**`、`/api/health`、`/api/posts/view`、`/api/cron/steam-sync`、`/api/quick/**`。
-- 私密路由：除白名单外默认要求登录；登录后 `/` 显示仪表盘占位页和私密侧边栏。
+- 私密路由：除白名单外默认要求登录；登录后 `/` 显示收藏册仪表盘和私密侧边栏。
 - 登录：Auth.js v5 Credentials，bcrypt 校验 `User.passwordHash`，JWT session 30 天。
 - Seed：`scripts/seed.ts` 幂等创建 / 更新唯一管理员，并补齐默认消费分类。
 - 私密布局：桌面端固定侧边栏，移动端汉堡抽屉；菜单包含仪表盘、待办、日历、游戏、书影、旅行、消费、消费分类、博客管理、导航管理和设置。
+- 首页聚合：匿名访问 `/` 展示公开门面，读取 `profile.name`、`profile.bio`、`profile.avatar` 并展示最新 3 篇已发布文章、博客和导航入口；登录后同一路径展示今日待办、本月消费、最近在玩、在读在看、下一段旅行、未来 14 天重要日子、今年数字和活动时间线，移动端按今日待办、本月消费、最近在玩、其余单列排布。
+- 活动时间线：`Activity` 记录通关游戏、读完/看完书影、文章首次发布、完成旅行和账单导入，仪表盘最近 20 条按上海日期分组展示并跳转到对应模块。
 - 全局日历：`/calendar` 使用 FullCalendar 聚合待办、旅行、重要日子和书影上映日；中文 locale、周一开头、桌面月视图、手机列表视图，支持“月 / 列表”切换、模块图例显隐、事件点击跳转和日期空白处快捷新建。
 - 重要日子：日历内可新建一次性或每年重复的重要日子；重复事件按查询年份展开，2 月 29 日在平年顺延到 2 月 28 日。
 - 游戏：`/games` 是私密游戏收藏册，支持状态 Tab（含计数）、平台筛选、标签多选、名称搜索和最近游玩/评分/名称排序；顶部统计显示总数、已通关数和总时长。
@@ -170,6 +181,7 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 地图与足迹：地图瓦片优先使用天地图 `vec_w` + `cva_w`，无 `TIANDITU_KEY` 时回退 OSM；地点搜索通过服务端 Nominatim 代理并限频，手动坐标可勾选“来自国内地图”做 GCJ-02 到 WGS-84 转换；`/trips/footprint` 聚合已完成行程地点。
 - 手动记账：`/expenses` 顶部和移动端底部提供“记一笔”入口；表单使用大号金额输入、支出 / 收入切换、按方向过滤的分类宫格、默认今天日期、商户和备注字段，手动流水固定写入 `platform=manual`、`txnNo=null`；未手选分类时会复用导入分类规则尝试自动分类。
 - 账单导入：`/expenses/import` 支持微信 / 支付宝 CSV 上传、平台自动识别、预览统计和确认导入；支付宝 CSV 按 GBK 自动解码，微信金额会剥离 `¥` 前缀，重复交易按 `[platform, txnNo]` 跳过，导入批次写入 `ImportBatch` 并可在 `/expenses/import/history` 查看。
+- 数据导出：`GET /api/admin/export` 登录后可下载全站 JSON zip，包含 Game、MediaItem、Trip（含 TripDay）、Post、Transaction、ExpenseCategory、Todo、SpecialDay、Link、Activity 和 manifest.json；图片不打包，JSON 保留 URL/key。
 - 分类规则沉淀：流水页行内修改分类时，如果该交易有商户名，会询问是否以后把该商户归到所选分类；确认后会把商户名追加进该分类 keywords。
 - 消费分类管理：`/admin/expense-categories` 支持新增、编辑、删除和拖拽排序分类，使用 `TagInput` 管理自动分类关键词；删除分类时保留流水并将其 `categoryId` 置空。
 - 金额工具：`src/lib/money.ts` 使用 Prisma Decimal 做金额格式化与求和，禁止浮点数参与合计，Server Component 传给 Client Component 前把 Decimal 转成字符串。
@@ -183,8 +195,9 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 公开渲染策略：Stage 6A 为保证 `npm run build` 与 Docker/CI 构建不依赖构建期数据库，`/blog`、`/nav`、`/rss.xml` 暂时动态渲染；恢复静态化前需要重新设计构建期数据源或 ISR 策略。
 - 上传与文件：`POST /api/upload` 仅登录可用；`GET /uploads/**` 只服务 public 区文件并带长缓存头，匿名可访问博客图片。
 - RSS 与浏览量：`/rss.xml` 输出最近 20 篇已发布文章；详情页客户端挂载后通过 `/api/posts/view` 上报浏览量，同 IP 同文章短时去抖。
+- PWA：`manifest.webmanifest`、192/512 图标和 apple-touch-icon 已接入，添加到主屏幕后使用独立窗口名称和站点图标；当前不实现 Service Worker。
 - 通用组件：`PageHeader`、`EmptyState`、`ConfirmDialog`、`TagInput`、`StatusBadge`、`RatingStars`、`MarkdownEditor`、`MarkdownRenderer`。
-- 临时验收页：登录后访问 `/admin/playground`，可检查通用组件、模块色、MarkdownRenderer、亮/暗模式和对比度样例区。
+- 全站收尾：根 layout 使用统一 `<title>` 模板；全站 404 和 error 页使用中文文案；Stage 2 临时 `/admin/playground` 已删除。
 - 健康检查：`GET /api/health` 返回 `{ ok: true }`。
 - 生产化准备：`next.config.ts` 已开启 standalone 输出；生产镜像入口会先执行 `prisma migrate deploy` 再启动 `server.js`；Caddy 模板会在最终上线时直出 `/uploads/**` public 文件。
 - CI/CD：GitHub Actions 的 quality job 在 push/PR 自动运行；build-and-deploy job 只允许手动触发，当前阶段不会误部署。
