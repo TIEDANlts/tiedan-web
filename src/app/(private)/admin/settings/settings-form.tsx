@@ -5,10 +5,8 @@ import { useActionState, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  initialProfileSettingsActionState,
-  saveProfileSettingsAction,
-} from "@/modules/settings/actions";
+import { initialProfileSettingsActionState } from "@/modules/settings/action-state";
+import { saveProfileSettingsAction } from "@/modules/settings/actions";
 import type { ProfileSettings } from "@/modules/settings/settings";
 
 function FieldError({ children }: { children?: string }) {

@@ -33,10 +33,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { initialExpenseActionState } from "@/modules/expenses/action-state";
 import {
   createExpenseCategoryAction,
   deleteExpenseCategoryAction,
-  initialExpenseActionState,
   reorderExpenseCategoriesAction,
   updateExpenseCategoryAction,
 } from "@/modules/expenses/actions";

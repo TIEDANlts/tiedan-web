@@ -11,11 +11,6 @@ export type ProfileSettingsActionState = {
   errors?: Partial<Record<"name" | "bio" | "avatar", string>>;
 };
 
-export const initialProfileSettingsActionState: ProfileSettingsActionState = {
-  ok: false,
-  message: null,
-};
-
 function stringValue(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
 }

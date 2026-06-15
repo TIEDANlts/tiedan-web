@@ -21,11 +21,6 @@ export type ExpenseActionState = {
   errors?: Partial<Record<"amount" | "direction" | "categoryId" | "date" | "name" | "icon" | "keywords", string>>;
 };
 
-export const initialExpenseActionState: ExpenseActionState = {
-  ok: false,
-  message: null,
-};
-
 async function requireSession() {
   const session = await auth();
 
