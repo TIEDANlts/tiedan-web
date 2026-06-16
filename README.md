@@ -42,7 +42,7 @@ npm.cmd run dev:local
 这个命令会依次做完：
 
 1. 通过 WSL `Ubuntu-24.04` 启动 PostgreSQL。
-2. 等待 `127.0.0.1:5432` 可用。
+2. 先检查 `127.0.0.1:5432`，不稳就自动切到 WSL 的实际 IP。
 3. 运行 `prisma migrate deploy` 和 `prisma generate`。
 4. 执行 `npm.cmd run db:seed`。
 5. 启动 Next.js 开发服务器。
@@ -77,6 +77,8 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && d
 Test-NetConnection -ComputerName localhost -Port 5432
 npx.cmd prisma migrate status
 ```
+
+如果 `127.0.0.1` 不稳定，`npm.cmd run dev:local` 会自动改用 WSL 的实际 IP，不需要手工改 `.env`。
 
 4. 初始化管理员账号：
 

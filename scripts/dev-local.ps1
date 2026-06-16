@@ -5,8 +5,12 @@ Set-Location $repoRoot
 
 $wslDistro = "Ubuntu-24.04"
 $composeFile = "docker-compose.dev.yml"
-$databaseHost = "127.0.0.1"
+$postgresContainerName = "personal_site_postgres"
+$loopbackDatabaseHost = "127.0.0.1"
 $databasePort = 5432
+$databaseName = "personal_site"
+$databaseUser = "personal_site"
+$keepAlivePidFile = "/tmp/personal-site-dev-local-keepalive.pid"
 function Write-Step {
   param([Parameter(Mandatory = $true)][string]$Message)
 
@@ -58,20 +62,28 @@ function Wait-ForTcpPort {
   param(
     [Parameter(Mandatory = $true)][string]$HostName,
     [Parameter(Mandatory = $true)][int]$Port,
-    [int]$TimeoutSeconds = 45
+    [int]$TimeoutSeconds = 45,
+    [int]$StableChecks = 1
   )
 
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  $successfulChecks = 0
+
   while ((Get-Date) -lt $deadline) {
     $client = [System.Net.Sockets.TcpClient]::new()
     try {
       $connect = $client.BeginConnect($HostName, $Port, $null, $null)
       if ($connect.AsyncWaitHandle.WaitOne(1000)) {
         $client.EndConnect($connect)
-        return
+        $successfulChecks += 1
+
+        if ($successfulChecks -ge $StableChecks) {
+          return
+        }
       }
     }
     catch {
+      $successfulChecks = 0
       Start-Sleep -Milliseconds 500
     }
     finally {
@@ -84,6 +96,42 @@ function Wait-ForTcpPort {
   throw "PostgreSQL is not reachable at ${HostName}:${Port} after ${TimeoutSeconds}s."
 }
 
+function Invoke-WslChecked {
+  param(
+    [Parameter(Mandatory = $true)][string]$Command,
+    [Parameter(Mandatory = $true)][string]$FailureMessage
+  )
+
+  Invoke-Checked `
+    -FilePath "wsl.exe" `
+    -ArgumentList @("--distribution", $wslDistro, "--user", "root", "--", "sh", "-lc", $Command) `
+    -FailureMessage $FailureMessage
+}
+
+function Wait-ForPostgresReady {
+  param(
+    [Parameter(Mandatory = $true)][string]$ContainerName,
+    [Parameter(Mandatory = $true)][string]$DatabaseName,
+    [Parameter(Mandatory = $true)][string]$DatabaseUser,
+    [Parameter(Mandatory = $true)][int]$Port,
+    [int]$TimeoutSeconds = 60
+  )
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  $readyCommand = "docker exec $ContainerName pg_isready -U $DatabaseUser -d $DatabaseName -h 127.0.0.1 -p $Port >/dev/null 2>&1"
+
+  while ((Get-Date) -lt $deadline) {
+    & wsl.exe --distribution $wslDistro --user root -- sh -lc $readyCommand
+    if ($LASTEXITCODE -eq 0) {
+      return
+    }
+
+    Start-Sleep -Seconds 1
+  }
+
+  throw "PostgreSQL container '$ContainerName' is not ready after ${TimeoutSeconds}s."
+}
+
 function Start-Postgres {
   param(
     [Parameter(Mandatory = $true)][string]$RepoWslPath,
@@ -93,18 +141,25 @@ function Start-Postgres {
   $quotedRepo = Quote-ShSingle $RepoWslPath
   $command = "cd $quotedRepo && docker compose -f $ComposePath up -d"
 
-  Invoke-Checked `
-    -FilePath "wsl.exe" `
-    -ArgumentList @("-d", $wslDistro, "-u", "root", "--", "sh", "-lc", $command) `
+  Invoke-WslChecked `
+    -Command $command `
     -FailureMessage "Failed to start PostgreSQL through WSL Docker."
 }
 
 function Start-WslKeepAlive {
-  Start-Process `
-    -FilePath "wsl.exe" `
-    -ArgumentList @("-d", $wslDistro, "-u", "root", "--", "sh", "-lc", "sleep infinity") `
-    -WindowStyle Hidden `
-    -PassThru
+  $quotedPidFile = Quote-ShSingle $keepAlivePidFile
+  $command = "if [ -f $quotedPidFile ]; then kill `$(cat $quotedPidFile) >/dev/null 2>&1 || true; rm -f $quotedPidFile; fi; nohup sh -c 'while :; do sleep 3600; done' >/dev/null 2>&1 & echo `$! > $quotedPidFile"
+
+  Invoke-WslChecked `
+    -Command $command `
+    -FailureMessage "Failed to keep WSL distro '$wslDistro' alive for Docker port forwarding."
+}
+
+function Stop-WslKeepAlive {
+  $quotedPidFile = Quote-ShSingle $keepAlivePidFile
+  $command = "if [ -f $quotedPidFile ]; then kill `$(cat $quotedPidFile) >/dev/null 2>&1 || true; rm -f $quotedPidFile; fi"
+
+  & wsl.exe --distribution $wslDistro --user root -- sh -lc $command | Out-Null
 }
 
 function Get-DotEnvValue {
@@ -119,14 +174,60 @@ function Get-DotEnvValue {
   return $value.Trim().Trim('"').Trim("'")
 }
 
-function Use-LoopbackDatabaseHost {
+function Get-WslPrimaryIp {
+  $output = & wsl.exe --distribution $wslDistro --user root -- sh -lc "hostname -I"
+  if ($LASTEXITCODE -ne 0) {
+    return $null
+  }
+
+  $outputText = ($output -join " ").Replace([char]0, " ").Trim()
+  $addresses = $outputText -split "\s+" | Where-Object { $_ -match "^\d{1,3}(\.\d{1,3}){3}$" }
+
+  return $addresses | Where-Object {
+    $_ -notmatch "^(127|169\.254)\."
+  } | Select-Object -First 1
+}
+
+function Resolve-DatabaseHost {
+  Write-Step "Checking Windows PostgreSQL access on ${loopbackDatabaseHost}:${databasePort}"
+  try {
+    Wait-ForTcpPort -HostName $loopbackDatabaseHost -Port $databasePort -TimeoutSeconds 20 -StableChecks 3
+    return $loopbackDatabaseHost
+  }
+  catch {
+    Write-Host "127.0.0.1 forwarding is not stable yet. Falling back to the WSL IP." -ForegroundColor Yellow
+  }
+
+  $wslIp = Get-WslPrimaryIp
+  if (-not $wslIp) {
+    throw "Could not determine the WSL IP address for PostgreSQL fallback."
+  }
+
+  Write-Step "Checking PostgreSQL access on ${wslIp}:${databasePort}"
+  Wait-ForTcpPort -HostName $wslIp -Port $databasePort -TimeoutSeconds 45 -StableChecks 2
+
+  return $wslIp
+}
+
+function Set-DatabaseHost {
+  param([Parameter(Mandatory = $true)][string]$HostName)
+
   $databaseUrl = Get-DotEnvValue "DATABASE_URL"
 
   if (-not $databaseUrl) {
     throw "DATABASE_URL is missing from .env."
   }
 
-  $env:DATABASE_URL = $databaseUrl.Replace("@localhost:", "@127.0.0.1:")
+  try {
+    $uri = [System.UriBuilder]::new($databaseUrl)
+    $uri.Host = $HostName
+    $env:DATABASE_URL = $uri.Uri.AbsoluteUri
+  }
+  catch {
+    $env:DATABASE_URL = $databaseUrl -replace "(@)(localhost|127\.0\.0\.1|\[[^\]]+\]|[^:/?]+)(:)", "`${1}${HostName}`$3"
+  }
+
+  Write-Host "Using PostgreSQL host ${HostName}:${databasePort} for Prisma and Next.js." -ForegroundColor Green
 }
 
 Write-Step "Checking local prerequisites"
@@ -144,16 +245,23 @@ if (-not (Test-Path -LiteralPath "node_modules")) {
 
 $repoWslPath = Convert-ToWslPath $repoRoot
 
+Write-Step "Keeping WSL alive for local port forwarding"
+Start-WslKeepAlive
+
 Write-Step "Starting PostgreSQL in WSL Docker"
 Start-Postgres -RepoWslPath $repoWslPath -ComposePath $composeFile
 
-Write-Step "Keeping WSL alive for local port forwarding"
-$keepAliveProcess = Start-WslKeepAlive
-
 try {
-  Write-Step "Waiting for PostgreSQL on ${databaseHost}:${databasePort}"
-  Wait-ForTcpPort -HostName $databaseHost -Port $databasePort -TimeoutSeconds 60
-  Use-LoopbackDatabaseHost
+  Write-Step "Waiting for PostgreSQL inside WSL Docker"
+  Wait-ForPostgresReady `
+    -ContainerName $postgresContainerName `
+    -DatabaseName $databaseName `
+    -DatabaseUser $databaseUser `
+    -Port $databasePort `
+    -TimeoutSeconds 60
+
+  $resolvedDatabaseHost = Resolve-DatabaseHost
+  Set-DatabaseHost -HostName $resolvedDatabaseHost
 
   Write-Step "Applying Prisma migrations"
   Invoke-Checked `
@@ -178,7 +286,5 @@ try {
   & npm.cmd run dev
 }
 finally {
-  if ($null -ne $keepAliveProcess -and -not $keepAliveProcess.HasExited) {
-    Stop-Process -Id $keepAliveProcess.Id -Force
-  }
+  Stop-WslKeepAlive
 }

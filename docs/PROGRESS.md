@@ -9,6 +9,13 @@
 
 ## 修复日志
 
+### 2026-06-16 · 本地启动与主题告警修复
+- 完成内容：`npm.cmd run dev:local` 现在会先确认 WSL Docker 里的 PostgreSQL 容器已就绪，再自动判断 `127.0.0.1:5432` 是否稳定；如果 Windows 侧端口转发不稳，会回退到 WSL 的实际 IP，并把同一个可达地址注入给 Prisma、seed 和 Next dev server。另将 `next-themes` 替换为本地主题 Provider，避免 React 19 / Next 16 下渲染 `<script>` 的控制台告警。
+- 关键文件：`scripts/dev-local.ps1`、`scripts/dev-local.test.ts`、`src/components/theme-provider.tsx`、`src/components/app-shell.tsx`、`src/components/ui/sonner.tsx`、`src/components/theme-provider.test.ts`、`README.md`。
+- 关键决定与偏离：不再持有 Windows 侧 `wsl.exe` 后台进程句柄，改为在 WSL 内部维持 keep-alive；主题切换继续保留 `light` / `dark` / `system` 语义，但由本地 context 接管，避免第三方注入脚本。
+- 遗留 TODO：如果以后还想进一步减轻本地启动步骤，可以再把 `.env` 存在性、`node_modules` 和 WSL Docker 状态单独拆成只读预检脚本。
+- 验证：`npx.cmd vitest run scripts/dev-local.test.ts src/components/theme-provider.test.ts` 通过；PowerShell Parser 解析 `scripts/dev-local.ps1` 通过；`npm.cmd run check` 通过（43 个测试文件、225 条通过）。
+
 ### 2026-06-16 · 本地一键启动脚本
 - 完成内容：新增 `npm.cmd run dev:local`，一条命令串起 WSL Docker PostgreSQL、`127.0.0.1:5432` 端口等待、Prisma migrate/generate、数据库 seed 和 Next dev server。
 - 关键文件：`scripts/dev-local.ps1`、`scripts/dev-local.test.ts`、`package.json`、`README.md`。

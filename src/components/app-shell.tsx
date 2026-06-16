@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useTheme } from "next-themes";
 import {
   BookOpen,
   CalendarDays,
@@ -24,6 +23,7 @@ import {
 import * as React from "react";
 
 import { logoutAction } from "@/app/(private)/actions";
+import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { isThemeOptionActive } from "@/components/app-shell-utils";
 import { cn } from "@/lib/utils";
