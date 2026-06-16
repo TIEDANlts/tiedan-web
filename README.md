@@ -33,6 +33,26 @@ node -e "console.log(crypto.randomBytes(32).toString('base64'))"
 
 ## 本地启动
 
+### 一键启动
+
+```powershell
+npm.cmd run dev:local
+```
+
+这个命令会依次做完：
+
+1. 通过 WSL `Ubuntu-24.04` 启动 PostgreSQL。
+2. 等待 `127.0.0.1:5432` 可用。
+3. 运行 `prisma migrate deploy` 和 `prisma generate`。
+4. 执行 `npm.cmd run db:seed`。
+5. 启动 Next.js 开发服务器。
+
+前提条件：
+
+- 已把 `.env.example` 复制为 `.env`。
+- 已执行过 `npm.cmd install`。
+- Windows 上已安装 WSL，并且 `Ubuntu-24.04` 里可用 Docker。
+
 1. 安装依赖：
 
 ```powershell
