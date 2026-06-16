@@ -9,6 +9,13 @@
 
 ## 修复日志
 
+### 2026-06-16 · 本地一键启动脚本
+- 完成内容：新增 `npm.cmd run dev:local`，一条命令串起 WSL Docker PostgreSQL、`127.0.0.1:5432` 端口等待、Prisma migrate/generate、数据库 seed 和 Next dev server。
+- 关键文件：`scripts/dev-local.ps1`、`scripts/dev-local.test.ts`、`package.json`、`README.md`。
+- 关键决定与偏离：脚本不自动安装依赖，也不改 `.env`；端口等待和脚本进程内的 `DATABASE_URL` 都优先使用 `127.0.0.1`，避免 Windows `localhost` 的 IPv6 抖动。
+- 遗留 TODO：如果后面还想继续简化，可以再加一个只读环境检查脚本，专门提示 `.env`、`node_modules`、WSL Docker 状态。
+- 验证：`npx.cmd vitest run scripts/dev-local.test.ts` 通过；`npm.cmd run check` 通过（42 个测试文件、223 条通过）。
+
 ### 2026-06-15 · 安全与导入补丁应用
 - 完成内容：应用 `tiedan-web-fixes.patch`，补强 Cron / 快捷记账 Bearer Token 常量时间比较、登录跳转 `from` 参数清洗、出站 HTTP SSRF 防护（URL 字面量与 DNS 解析阶段双校验）、账单 CSV 空表头列对齐、博客浏览去重 Map 过期清理，并补充对应单测；按要求删除补丁文件。
 - 关键文件：`src/lib/secure-compare.ts`、`src/lib/ssrf.ts`、`src/lib/http.ts`、`src/lib/auth/routes.ts`、`src/modules/expenses/parsers/common.ts`、`src/modules/posts/view.ts`、`src/app/api/cron/steam-sync/route.ts`、`src/app/api/quick/expense/route.ts`。
