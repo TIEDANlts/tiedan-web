@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
 import { loginRateLimiter } from "@/lib/auth/rate-limit";
 import { safeFromPath } from "@/lib/auth/routes";
+import { loginErrorMessage, shouldRecordLoginFailure } from "./errors";
 
 export type LoginState = {
   error: string | null;
@@ -44,8 +45,11 @@ export async function loginAction(
     });
   } catch (error) {
     if (error instanceof AuthError) {
-      loginRateLimiter.recordFailure(ip);
-      return { error: "用户名或密码不正确。" };
+      if (shouldRecordLoginFailure(error)) {
+        loginRateLimiter.recordFailure(ip);
+      }
+
+      return { error: loginErrorMessage(error) };
     }
 
     throw error;

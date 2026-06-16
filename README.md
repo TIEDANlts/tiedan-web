@@ -42,10 +42,12 @@ npm.cmd run dev:local
 这个命令会依次做完：
 
 1. 通过 WSL `Ubuntu-24.04` 启动 PostgreSQL。
-2. 先检查 `127.0.0.1:5432`，不稳就自动切到 WSL 的实际 IP。
-3. 运行 `prisma migrate deploy` 和 `prisma generate`。
-4. 执行 `npm.cmd run db:seed`。
-5. 启动 Next.js 开发服务器。
+2. 在 WSL 内确认 PostgreSQL 容器已就绪。
+3. 在 WSL 内运行 `prisma migrate deploy` 和 `prisma generate`。
+4. 在 WSL 内执行 `npm run db:seed`。
+5. 在 WSL 内启动 Next.js 开发服务器，并监听 `0.0.0.0:3000`。
+
+脚本会给 WSL 内部命令临时注入 `DATABASE_URL=postgresql://personal_site:personal_site@127.0.0.1:5432/personal_site?schema=public`。这样 Prisma、seed 和 Next dev server 都直接从 WSL 内访问 Docker PostgreSQL，不再依赖 Windows 到 WSL 的 `localhost:5432` 端口转发。
 
 前提条件：
 
@@ -78,7 +80,7 @@ Test-NetConnection -ComputerName localhost -Port 5432
 npx.cmd prisma migrate status
 ```
 
-如果 `127.0.0.1` 不稳定，`npm.cmd run dev:local` 会自动改用 WSL 的实际 IP，不需要手工改 `.env`。
+如果 Windows 侧 `localhost` / `127.0.0.1` 到数据库不稳定，优先使用 `npm.cmd run dev:local`。它会把数据库相关命令和 Next dev server 都放在 WSL 内运行，绕开 Windows 侧端口转发抖动，不需要手工改 `.env`。
 
 4. 初始化管理员账号：
 

@@ -15,40 +15,40 @@ describe("local development launcher", () => {
 
   test("starts the required local services before launching Next dev", () => {
     const script = readFileSync(new URL("./dev-local.ps1", import.meta.url), "utf8");
-    const keepAliveIndex = script.indexOf('Write-Step "Keeping WSL alive for local port forwarding"');
     const startPostgresIndex = script.indexOf('Write-Step "Starting PostgreSQL in WSL Docker"');
+    const migrateIndex = script.indexOf('Write-Step "Applying Prisma migrations in WSL"');
+    const devIndex = script.indexOf('Write-Step "Starting Next.js dev server in WSL"');
 
     expect(script).toContain("wsl.exe");
-    expect(script).toContain("--user");
+    expect(script).toContain("wsl.exe -d $wslDistro -u root");
+    expect(script).not.toContain("--distribution");
+    expect(script).not.toContain("--user");
     expect(script).toContain("root");
     expect(script).toContain("docker compose -f $ComposePath up -d");
-    expect(script).toContain("Stop-WslKeepAlive");
-    expect(script).toContain("nohup sh -c");
-    expect(script).toContain("Wait-ForTcpPort");
     expect(script).toContain("Wait-ForPostgresReady");
-    expect(script).toContain("Resolve-DatabaseHost");
-    expect(script).toContain("Set-DatabaseHost");
-    expect(script).toContain("Get-WslPrimaryIp");
-    expect(keepAliveIndex).toBeGreaterThanOrEqual(0);
     expect(startPostgresIndex).toBeGreaterThanOrEqual(0);
-    expect(keepAliveIndex).toBeLessThan(startPostgresIndex);
-    expect(script).toMatch(/-FilePath "npx\.cmd"[\s\S]*"prisma", "migrate", "deploy"/);
-    expect(script).toMatch(/-FilePath "npx\.cmd"[\s\S]*"prisma", "generate"/);
-    expect(script).toMatch(/-FilePath "npm\.cmd"[\s\S]*"run", "db:seed"/);
-    expect(script).toContain("& npm.cmd run dev");
+    expect(migrateIndex).toBeGreaterThan(startPostgresIndex);
+    expect(devIndex).toBeGreaterThan(migrateIndex);
+    expect(script).toContain("$wslDatabaseEnv npx prisma migrate deploy");
+    expect(script).toContain("$wslDatabaseEnv npx prisma generate");
+    expect(script).toContain("$wslDatabaseEnv npm run db:seed");
+    expect(script).toContain("$wslDatabaseEnv npm run dev -- --hostname 0.0.0.0");
   });
 
-  test("uses the reachable PostgreSQL host for every Windows-side command", () => {
+  test("runs database-dependent commands inside WSL instead of Windows port forwarding", () => {
     const script = readFileSync(new URL("./dev-local.ps1", import.meta.url), "utf8");
-    const resolveHostIndex = script.indexOf("$resolvedDatabaseHost = Resolve-DatabaseHost");
-    const setHostIndex = script.indexOf("Set-DatabaseHost -HostName $resolvedDatabaseHost");
-    const migrateIndex = script.indexOf('Write-Step "Applying Prisma migrations"');
-    const devIndex = script.indexOf("& npm.cmd run dev");
+    const invokeWslChecked = script.slice(
+      script.indexOf("function Invoke-WslChecked"),
+      script.indexOf("function Invoke-WslCommand"),
+    );
 
-    expect(resolveHostIndex).toBeGreaterThanOrEqual(0);
-    expect(setHostIndex).toBeGreaterThan(resolveHostIndex);
-    expect(setHostIndex).toBeLessThan(migrateIndex);
-    expect(script).toContain("$env:DATABASE_URL");
-    expect(devIndex).toBeGreaterThan(setHostIndex);
+    expect(script).toContain("Invoke-WslChecked");
+    expect(script).toContain("Invoke-WslCommand");
+    expect(invokeWslChecked).toContain("& wsl.exe -d $wslDistro -u root -- sh -lc $Command");
+    expect(invokeWslChecked).not.toContain("Invoke-Checked");
+    expect(script).toContain("127.0.0.1:${databasePort}");
+    expect(script).not.toContain("Resolve-DatabaseHost");
+    expect(script).not.toContain("$env:DATABASE_URL");
+    expect(script).not.toContain("& npm.cmd run dev");
   });
 });
