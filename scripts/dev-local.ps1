@@ -5,8 +5,11 @@ Set-Location $repoRoot
 
 $wslDistro = "Ubuntu-24.04"
 $composeFile = "docker-compose.dev.yml"
-$databaseHost = "127.0.0.1"
+$postgresContainerName = "personal_site_postgres"
 $databasePort = 5432
+$databaseName = "personal_site"
+$databaseUser = "personal_site"
+$wslDatabaseUrl = "postgresql://${databaseUser}:${databaseUser}@127.0.0.1:${databasePort}/${databaseName}?schema=public"
 function Write-Step {
   param([Parameter(Mandatory = $true)][string]$Message)
 
@@ -41,47 +44,46 @@ function Quote-ShSingle {
   return "'" + $Value.Replace("'", "'\''") + "'"
 }
 
-function Invoke-Checked {
+function Invoke-WslChecked {
   param(
-    [Parameter(Mandatory = $true)][string]$FilePath,
-    [Parameter(Mandatory = $true)][string[]]$ArgumentList,
+    [Parameter(Mandatory = $true)][string]$Command,
     [Parameter(Mandatory = $true)][string]$FailureMessage
   )
 
-  & $FilePath @ArgumentList
+  & wsl.exe -d $wslDistro -u root -- sh -lc $Command
   if ($LASTEXITCODE -ne 0) {
     throw "$FailureMessage Exit code: $LASTEXITCODE"
   }
 }
 
-function Wait-ForTcpPort {
+function Invoke-WslCommand {
+  param([Parameter(Mandatory = $true)][string]$Command)
+
+  & wsl.exe -d $wslDistro -u root -- sh -lc $Command
+}
+
+function Wait-ForPostgresReady {
   param(
-    [Parameter(Mandatory = $true)][string]$HostName,
+    [Parameter(Mandatory = $true)][string]$ContainerName,
+    [Parameter(Mandatory = $true)][string]$DatabaseName,
+    [Parameter(Mandatory = $true)][string]$DatabaseUser,
     [Parameter(Mandatory = $true)][int]$Port,
-    [int]$TimeoutSeconds = 45
+    [int]$TimeoutSeconds = 60
   )
 
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  $readyCommand = "docker exec $ContainerName pg_isready -U $DatabaseUser -d $DatabaseName -h 127.0.0.1 -p $Port >/dev/null 2>&1"
+
   while ((Get-Date) -lt $deadline) {
-    $client = [System.Net.Sockets.TcpClient]::new()
-    try {
-      $connect = $client.BeginConnect($HostName, $Port, $null, $null)
-      if ($connect.AsyncWaitHandle.WaitOne(1000)) {
-        $client.EndConnect($connect)
-        return
-      }
-    }
-    catch {
-      Start-Sleep -Milliseconds 500
-    }
-    finally {
-      $client.Close()
+    & wsl.exe -d $wslDistro -u root -- sh -lc $readyCommand
+    if ($LASTEXITCODE -eq 0) {
+      return
     }
 
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Seconds 1
   }
 
-  throw "PostgreSQL is not reachable at ${HostName}:${Port} after ${TimeoutSeconds}s."
+  throw "PostgreSQL container '$ContainerName' is not ready after ${TimeoutSeconds}s."
 }
 
 function Start-Postgres {
@@ -93,40 +95,9 @@ function Start-Postgres {
   $quotedRepo = Quote-ShSingle $RepoWslPath
   $command = "cd $quotedRepo && docker compose -f $ComposePath up -d"
 
-  Invoke-Checked `
-    -FilePath "wsl.exe" `
-    -ArgumentList @("-d", $wslDistro, "-u", "root", "--", "sh", "-lc", $command) `
+  Invoke-WslChecked `
+    -Command $command `
     -FailureMessage "Failed to start PostgreSQL through WSL Docker."
-}
-
-function Start-WslKeepAlive {
-  Start-Process `
-    -FilePath "wsl.exe" `
-    -ArgumentList @("-d", $wslDistro, "-u", "root", "--", "sh", "-lc", "sleep infinity") `
-    -WindowStyle Hidden `
-    -PassThru
-}
-
-function Get-DotEnvValue {
-  param([Parameter(Mandatory = $true)][string]$Name)
-
-  $line = Get-Content -LiteralPath ".env" | Where-Object { $_ -match "^\s*$Name\s*=" } | Select-Object -First 1
-  if (-not $line) {
-    return $null
-  }
-
-  $value = $line -replace "^\s*$Name\s*=\s*", ""
-  return $value.Trim().Trim('"').Trim("'")
-}
-
-function Use-LoopbackDatabaseHost {
-  $databaseUrl = Get-DotEnvValue "DATABASE_URL"
-
-  if (-not $databaseUrl) {
-    throw "DATABASE_URL is missing from .env."
-  }
-
-  $env:DATABASE_URL = $databaseUrl.Replace("@localhost:", "@127.0.0.1:")
 }
 
 Write-Step "Checking local prerequisites"
@@ -143,42 +114,36 @@ if (-not (Test-Path -LiteralPath "node_modules")) {
 }
 
 $repoWslPath = Convert-ToWslPath $repoRoot
+$quotedRepo = Quote-ShSingle $repoWslPath
+$quotedWslDatabaseUrl = Quote-ShSingle $wslDatabaseUrl
+$wslDatabaseEnv = "DATABASE_URL=$quotedWslDatabaseUrl"
 
 Write-Step "Starting PostgreSQL in WSL Docker"
 Start-Postgres -RepoWslPath $repoWslPath -ComposePath $composeFile
 
-Write-Step "Keeping WSL alive for local port forwarding"
-$keepAliveProcess = Start-WslKeepAlive
+Write-Step "Waiting for PostgreSQL inside WSL Docker"
+Wait-ForPostgresReady `
+  -ContainerName $postgresContainerName `
+  -DatabaseName $databaseName `
+  -DatabaseUser $databaseUser `
+  -Port $databasePort `
+  -TimeoutSeconds 60
 
-try {
-  Write-Step "Waiting for PostgreSQL on ${databaseHost}:${databasePort}"
-  Wait-ForTcpPort -HostName $databaseHost -Port $databasePort -TimeoutSeconds 60
-  Use-LoopbackDatabaseHost
+Write-Step "Applying Prisma migrations in WSL"
+Invoke-WslChecked `
+  -Command "cd $quotedRepo && $wslDatabaseEnv npx prisma migrate deploy" `
+  -FailureMessage "Prisma migration failed."
 
-  Write-Step "Applying Prisma migrations"
-  Invoke-Checked `
-    -FilePath "npx.cmd" `
-    -ArgumentList @("prisma", "migrate", "deploy") `
-    -FailureMessage "Prisma migration failed."
+Write-Step "Generating Prisma client in WSL"
+Invoke-WslChecked `
+  -Command "cd $quotedRepo && $wslDatabaseEnv npx prisma generate" `
+  -FailureMessage "Prisma generate failed."
 
-  Write-Step "Generating Prisma client"
-  Invoke-Checked `
-    -FilePath "npx.cmd" `
-    -ArgumentList @("prisma", "generate") `
-    -FailureMessage "Prisma generate failed."
+Write-Step "Seeding local data in WSL"
+Invoke-WslChecked `
+  -Command "cd $quotedRepo && $wslDatabaseEnv npm run db:seed" `
+  -FailureMessage "Database seed failed."
 
-  Write-Step "Seeding local data"
-  Invoke-Checked `
-    -FilePath "npm.cmd" `
-    -ArgumentList @("run", "db:seed") `
-    -FailureMessage "Database seed failed."
-
-  Write-Step "Starting Next.js dev server"
-  Write-Host "Open http://127.0.0.1:3000 after the server is ready." -ForegroundColor Green
-  & npm.cmd run dev
-}
-finally {
-  if ($null -ne $keepAliveProcess -and -not $keepAliveProcess.HasExited) {
-    Stop-Process -Id $keepAliveProcess.Id -Force
-  }
-}
+Write-Step "Starting Next.js dev server in WSL"
+Write-Host "Open http://localhost:3000 after the server is ready. Stop it with Ctrl+C." -ForegroundColor Green
+Invoke-WslCommand -Command "cd $quotedRepo && $wslDatabaseEnv npm run dev -- --hostname 0.0.0.0"

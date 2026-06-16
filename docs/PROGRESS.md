@@ -9,6 +9,13 @@
 
 ## 修复日志
 
+### 2026-06-16 · 本地启动、主题告警与登录错误修复
+- 完成内容：`npm.cmd run dev:local` 现在会先确认 WSL Docker 里的 PostgreSQL 容器已就绪，然后把 `prisma migrate deploy`、`prisma generate`、`db:seed` 和 Next dev server 都放在 WSL 内运行，并临时注入 WSL 内可达的 `DATABASE_URL`，避免 Windows 到 WSL 的 `localhost:5432` 端口转发抖动导致公开博客、导航和登录页 Prisma 报错。另将 `next-themes` 替换为本地主题 Provider，避免 React 19 / Next 16 下渲染 `<script>` 的控制台告警；登录失败现在只在真实凭据错误时提示“用户名或密码不正确”并计入限流，数据库/服务错误会提示检查本地数据库。
+- 关键文件：`scripts/dev-local.ps1`、`scripts/dev-local.test.ts`、`src/components/theme-provider.tsx`、`src/components/app-shell.tsx`、`src/components/ui/sonner.tsx`、`src/components/theme-provider.test.ts`、`src/app/(public)/login/actions.ts`、`src/app/(public)/login/errors.ts`、`src/app/(public)/login/errors.test.ts`、`README.md`。
+- 关键决定与偏离：不再依赖 Windows 侧 Node/Prisma 访问 WSL Docker 映射端口，也不再尝试在 Windows 侧猜测 `127.0.0.1`、`localhost` 或 WSL IP；本地一键启动的数据库访问统一走 WSL 内部 `127.0.0.1:5432`。主题切换继续保留 `light` / `dark` / `system` 语义，但由本地 context 接管，避免第三方注入脚本。
+- 遗留 TODO：如果以后还想进一步减轻本地启动步骤，可以再把 `.env` 存在性、`node_modules` 和 WSL Docker 状态单独拆成只读预检脚本。
+- 验证：`npx.cmd vitest run scripts/dev-local.test.ts src/components/theme-provider.test.ts src/app/(public)/login/errors.test.ts` 通过；PowerShell Parser 解析 `scripts/dev-local.ps1` 通过；WSL 内 `DATABASE_URL=... npx prisma migrate status` 与 `DATABASE_URL=... npm run db:seed` 通过；`npm.cmd run check` 通过（44 个测试文件、229 条通过）。Codex 沙箱用户下直接执行 `npm.cmd run dev:local` 仍会因该子进程看不到用户的 WSL 发行版而报 `WSL_E_DISTRO_NOT_FOUND`，需要用户在自己的 PowerShell 中复验。
+
 ### 2026-06-16 · 本地一键启动脚本
 - 完成内容：新增 `npm.cmd run dev:local`，一条命令串起 WSL Docker PostgreSQL、`127.0.0.1:5432` 端口等待、Prisma migrate/generate、数据库 seed 和 Next dev server。
 - 关键文件：`scripts/dev-local.ps1`、`scripts/dev-local.test.ts`、`package.json`、`README.md`。
