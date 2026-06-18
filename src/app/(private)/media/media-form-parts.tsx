@@ -1,28 +1,10 @@
 "use client";
 
-import { ImagePlus } from "lucide-react";
-import type { ChangeEvent } from "react";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
-import { Input } from "@/components/ui/input";
-import { uploadImageFile } from "@/lib/upload-client";
 import { cn } from "@/lib/utils";
 
-export function FieldError({ children }: { children?: string }) {
-  if (!children) {
-    return null;
-  }
-
-  return <p className="text-xs text-destructive">{children}</p>;
-}
-
-export function fieldClass() {
-  return "block space-y-2 text-sm font-medium text-ink";
-}
-
-export async function uploadMediaCover(file: File) {
-  return (await uploadImageFile(file, { area: "public", subdir: "media" })).url;
-}
+export { FieldError, fieldClass } from "@/app/(private)/shared/form-controls/form-field";
 
 export function MediaCover({
   item,
@@ -50,69 +32,6 @@ export function MediaCover({
   return (
     <div className={cn("flex h-full w-full items-center justify-center bg-module-media text-5xl font-semibold text-white", className)}>
       {item.title.slice(0, 1).toUpperCase()}
-    </div>
-  );
-}
-
-export function CoverInput({
-  title,
-  coverUrl,
-  setCoverUrl,
-  error,
-  previewClassName,
-}: {
-  title: string;
-  coverUrl: string;
-  setCoverUrl: (value: string) => void;
-  error?: string;
-  previewClassName?: string;
-}) {
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [isUploading, startUpload] = useTransition();
-
-  function onFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    setUploadError(null);
-    startUpload(async () => {
-      try {
-        setCoverUrl(await uploadMediaCover(file));
-      } catch (uploadError) {
-        setUploadError(uploadError instanceof Error ? uploadError.message : "封面上传失败。");
-      } finally {
-        event.target.value = "";
-      }
-    });
-  }
-
-  return (
-    <div className="space-y-2">
-      <label className={fieldClass()}>
-        <span>封面</span>
-        <Input
-          name="coverUrl"
-          value={coverUrl}
-          onChange={(event) => setCoverUrl(event.target.value)}
-          placeholder="/uploads/media/cover.webp 或 https://..."
-        />
-      </label>
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-ink hover:bg-surface-2">
-          <ImagePlus className="size-4" />
-          {isUploading ? "正在上传..." : "上传封面"}
-          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" onChange={onFileChange} />
-        </label>
-        <FieldError>{error}</FieldError>
-        {uploadError ? <p className="text-xs text-destructive">{uploadError}</p> : null}
-      </div>
-      {coverUrl || title ? (
-        <div className={cn("mt-2 aspect-[2/3] max-w-40 overflow-hidden rounded-lg border border-border bg-surface-2", previewClassName)}>
-          <MediaCover item={{ title: title || "封面", coverUrl }} />
-        </div>
-      ) : null}
     </div>
   );
 }

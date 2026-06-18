@@ -6,9 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { ComponentType, ReactNode } from "react";
 import { useActionState, useEffect, useId, useState, useTransition } from "react";
 
-import { RatingStars } from "@/components/rating-stars";
 import { StatusBadge } from "@/components/status-badge";
-import { TagInput } from "@/components/tag-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +23,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { CoverUploadInput } from "@/app/(private)/shared/form-controls/cover-upload-input";
+import { RatingField } from "@/app/(private)/shared/form-controls/rating-field";
+import { TagField } from "@/app/(private)/shared/form-controls/tag-field";
 import { cn } from "@/lib/utils";
 import {
   createMediaItemAction,
@@ -45,7 +46,7 @@ import {
   mediaTypeLabels,
   mediaTypes,
 } from "@/modules/media/utils";
-import { CoverInput, FieldError, MediaCover, fieldClass } from "./media-form-parts";
+import { FieldError, MediaCover, fieldClass } from "./media-form-parts";
 
 type MediaFormAction = (previousState: MediaActionState, formData: FormData) => Promise<MediaActionState>;
 
@@ -478,23 +479,20 @@ function MediaForm({
         </label>
       ) : null}
 
-      <div className="space-y-2">
-        <span className="text-sm font-medium text-ink">评分</span>
-        <div className="flex flex-wrap items-center gap-3">
-          <RatingStars value={rating ?? 0} editable onChange={setRating} />
-          <Button type="button" variant="ghost" size="sm" onClick={() => setRating(null)}>
-            清除评分
-          </Button>
-        </div>
-        <FieldError>{state.errors?.rating}</FieldError>
-      </div>
+      <RatingField value={rating} onChange={setRating} error={state.errors?.rating} />
 
-      <CoverInput title={title} coverUrl={coverUrl} setCoverUrl={setCoverUrl} error={state.errors?.coverUrl} />
+      <CoverUploadInput
+        coverUrl={coverUrl}
+        setCoverUrl={setCoverUrl}
+        uploadSubdir="media"
+        placeholder="/uploads/media/cover.webp 或 https://..."
+        error={state.errors?.coverUrl}
+        previewClassName="aspect-[2/3] max-w-40"
+        showPreview={Boolean(coverUrl || title)}
+        renderPreview={(nextCoverUrl) => <MediaCover item={{ title: title || "封面", coverUrl: nextCoverUrl }} />}
+      />
 
-      <div className="space-y-2">
-        <span className="text-sm font-medium text-ink">标签</span>
-        <TagInput value={tags} onChange={setTags} placeholder="输入标签后回车" />
-      </div>
+      <TagField value={tags} onChange={setTags} />
 
       {state.message ? (
         <p className={state.ok ? "text-sm text-primary" : "text-sm text-destructive"}>{state.message}</p>

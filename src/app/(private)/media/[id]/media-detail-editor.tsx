@@ -7,11 +7,13 @@ import type { ReactNode } from "react";
 import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 
 import { MarkdownEditor } from "@/components/markdown-editor";
-import { RatingStars } from "@/components/rating-stars";
 import { StatusBadge } from "@/components/status-badge";
-import { TagInput } from "@/components/tag-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CoverUploadInput } from "@/app/(private)/shared/form-controls/cover-upload-input";
+import { RatingField } from "@/app/(private)/shared/form-controls/rating-field";
+import { StatusFlowPanel } from "@/app/(private)/shared/form-controls/status-flow-panel";
+import { TagField } from "@/app/(private)/shared/form-controls/tag-field";
 import { cn } from "@/lib/utils";
 import { advanceMediaStatusAction, updateMediaItemAction } from "@/modules/media/actions";
 import { initialMediaActionState } from "@/modules/media/action-state";
@@ -28,7 +30,7 @@ import {
   mediaTypes,
   nextMediaStatus,
 } from "@/modules/media/utils";
-import { CoverInput, FieldError, fieldClass } from "../media-form-parts";
+import { FieldError, MediaCover, fieldClass } from "../media-form-parts";
 
 export function MediaDetailEditor({
   item,
@@ -117,26 +119,28 @@ export function MediaDetailEditor({
             编辑元信息、状态、评分、标签和长文感想。
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-module-media/10 p-3">
-          <StatusBadge value={status} map={mediaStatusMapForType(type)} />
-          {nextStatus ? (
-            <Button type="button" size="sm" onClick={advanceStatus} disabled={isFlowPending}>
-              {isFlowPending ? "正在更新..." : mediaStatusFlowLabel(type, status)}
-            </Button>
-          ) : null}
-          {flowMessage ? <span className="text-sm text-ink-2">{flowMessage}</span> : null}
-          {flowWarning ? <span className="text-sm text-module-media">{flowWarning}</span> : null}
-        </div>
+        <StatusFlowPanel
+          module="media"
+          badge={<StatusBadge value={status} map={mediaStatusMapForType(type)} />}
+          buttonLabel={nextStatus ? mediaStatusFlowLabel(type, status) : undefined}
+          pending={isFlowPending}
+          message={flowMessage}
+          warning={flowWarning}
+          onAdvance={advanceStatus}
+        />
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)]">
         <section className="space-y-5 rounded-xl border border-border bg-surface p-4 shadow-sm">
-          <CoverInput
-            title={title}
+          <CoverUploadInput
             coverUrl={coverUrl}
             setCoverUrl={setCoverUrl}
+            uploadSubdir="media"
+            placeholder="/uploads/media/cover.webp 或 https://..."
             error={state.errors?.coverUrl}
-            previewClassName="max-w-full"
+            previewClassName="aspect-[2/3] max-w-full"
+            showPreview={Boolean(coverUrl || title)}
+            renderPreview={(nextCoverUrl) => <MediaCover item={{ title: title || "封面", coverUrl: nextCoverUrl }} />}
           />
 
           <div className="grid gap-4">
@@ -220,21 +224,9 @@ export function MediaDetailEditor({
         </section>
 
         <section className="space-y-5 rounded-xl border border-border bg-surface p-4 shadow-sm">
-          <div className="space-y-2">
-            <span className="text-sm font-medium text-ink">评分</span>
-            <div className="flex flex-wrap items-center gap-3">
-              <RatingStars value={rating ?? 0} editable onChange={setRating} />
-              <Button type="button" variant="ghost" size="sm" onClick={() => setRating(null)}>
-                清除评分
-              </Button>
-            </div>
-            <FieldError>{state.errors?.rating}</FieldError>
-          </div>
+          <RatingField value={rating} onChange={setRating} error={state.errors?.rating} />
 
-          <div className="space-y-2">
-            <span className="text-sm font-medium text-ink">标签</span>
-            <TagInput value={tags} onChange={setTags} placeholder="输入标签后回车" />
-          </div>
+          <TagField value={tags} onChange={setTags} />
 
           <label className="inline-flex items-center gap-2 text-sm font-medium text-ink">
             <input
