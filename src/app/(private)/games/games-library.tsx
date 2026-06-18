@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock3, Gamepad2, ImagePlus, Plus, RefreshCw, Search, Star, Trophy } from "lucide-react";
+import { Clock3, Gamepad2, Plus, RefreshCw, Search, Star, Trophy } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import * as React from "react";
@@ -8,9 +8,7 @@ import { useActionState, useEffect, useId, useMemo, useState, useTransition } fr
 import { toast } from "sonner";
 
 import { MarkdownEditor } from "@/components/markdown-editor";
-import { RatingStars } from "@/components/rating-stars";
 import { StatusBadge } from "@/components/status-badge";
-import { TagInput } from "@/components/tag-input";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,7 +25,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { uploadImageFile } from "@/lib/upload-client";
+import { CoverUploadInput } from "@/app/(private)/shared/form-controls/cover-upload-input";
+import { FieldError, fieldClass } from "@/app/(private)/shared/form-controls/form-field";
+import { RatingField } from "@/app/(private)/shared/form-controls/rating-field";
+import { StatusFlowPanel } from "@/app/(private)/shared/form-controls/status-flow-panel";
+import { TagField } from "@/app/(private)/shared/form-controls/tag-field";
 import { cn } from "@/lib/utils";
 import {
   advanceGameStatusAction,
@@ -61,18 +63,6 @@ function formatHours(minutes: number) {
 
   const hours = minutes / 60;
   return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} 小时`;
-}
-
-function FieldError({ children }: { children?: string }) {
-  if (!children) {
-    return null;
-  }
-
-  return <p className="text-xs text-destructive">{children}</p>;
-}
-
-function fieldClass() {
-  return "block space-y-2 text-sm font-medium text-ink";
 }
 
 function GameCover({ game, className }: { game: Pick<GameListItem, "name" | "coverUrl">; className?: string }) {
@@ -299,64 +289,6 @@ function FiltersBar({ data }: { data: GamesPageData }) {
   );
 }
 
-function CoverInput({
-  coverUrl,
-  setCoverUrl,
-  error,
-}: {
-  coverUrl: string;
-  setCoverUrl: (value: string) => void;
-  error?: string;
-}) {
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [isUploading, startUpload] = useTransition();
-
-  function onFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    setUploadError(null);
-    startUpload(async () => {
-      try {
-        const { url } = await uploadImageFile(file, { area: "public", subdir: "games" });
-        setCoverUrl(url);
-      } catch (uploadError) {
-        setUploadError(uploadError instanceof Error ? uploadError.message : "封面上传失败。");
-      } finally {
-        event.target.value = "";
-      }
-    });
-  }
-
-  return (
-    <div className="space-y-2">
-      <label className={fieldClass()}>
-        <span>封面</span>
-        <Input
-          name="coverUrl"
-          value={coverUrl}
-          onChange={(event) => setCoverUrl(event.target.value)}
-          placeholder="/uploads/games/cover.webp 或 https://..."
-        />
-      </label>
-      <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-ink hover:bg-surface-2">
-        <ImagePlus className="size-4" />
-        {isUploading ? "正在上传..." : "上传封面"}
-        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" onChange={onFileChange} />
-      </label>
-      <FieldError>{error}</FieldError>
-      {uploadError ? <p className="text-xs text-destructive">{uploadError}</p> : null}
-      {coverUrl ? (
-        <div className="mt-2 aspect-[16/9] overflow-hidden rounded-lg border border-border bg-surface-2">
-          <GameCover game={{ name: "封面", coverUrl }} />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function GameForm({
   game,
   action,
@@ -426,16 +358,15 @@ function GameForm({
       <input type="hidden" name="reviewMd" value={reviewMd} />
 
       {game ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-module-games/10 p-3">
-          <StatusBadge value={status} map={gameStatusBadgeMap} />
-          {nextStatus ? (
-            <Button type="button" size="sm" onClick={advanceStatus} disabled={isFlowPending}>
-              {isFlowPending ? "正在更新..." : gameStatusFlowLabel(status)}
-            </Button>
-          ) : null}
-          {flowMessage ? <span className="text-sm text-ink-2">{flowMessage}</span> : null}
-          {flowWarning ? <span className="text-sm text-module-games">{flowWarning}</span> : null}
-        </div>
+        <StatusFlowPanel
+          module="games"
+          badge={<StatusBadge value={status} map={gameStatusBadgeMap} />}
+          buttonLabel={nextStatus ? gameStatusFlowLabel(status) : undefined}
+          pending={isFlowPending}
+          message={flowMessage}
+          warning={flowWarning}
+          onAdvance={advanceStatus}
+        />
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -502,24 +433,20 @@ function GameForm({
           <FieldError>{state.errors?.lastPlayedAt}</FieldError>
         </label>
 
-        <div className="space-y-2">
-          <span className="text-sm font-medium text-ink">评分</span>
-          <div className="flex flex-wrap items-center gap-3">
-            <RatingStars value={rating ?? 0} editable onChange={setRating} />
-            <Button type="button" variant="ghost" size="sm" onClick={() => setRating(null)}>
-              清除评分
-            </Button>
-          </div>
-          <FieldError>{state.errors?.rating}</FieldError>
-        </div>
+        <RatingField value={rating} onChange={setRating} error={state.errors?.rating} />
       </div>
 
-      <CoverInput coverUrl={coverUrl} setCoverUrl={setCoverUrl} error={state.errors?.coverUrl} />
+      <CoverUploadInput
+        coverUrl={coverUrl}
+        setCoverUrl={setCoverUrl}
+        uploadSubdir="games"
+        placeholder="/uploads/games/cover.webp 或 https://..."
+        error={state.errors?.coverUrl}
+        previewClassName="aspect-[16/9]"
+        renderPreview={(nextCoverUrl) => <GameCover game={{ name: "封面", coverUrl: nextCoverUrl }} />}
+      />
 
-      <div className="space-y-2">
-        <span className="text-sm font-medium text-ink">标签</span>
-        <TagInput value={tags} onChange={setTags} placeholder="输入标签后回车" />
-      </div>
+      <TagField value={tags} onChange={setTags} />
 
       <div className="space-y-2">
         <span className="text-sm font-medium text-ink">备注 / 感想</span>
