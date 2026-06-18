@@ -6,6 +6,7 @@ import {
   mediaStatusLabel,
   normalizeMediaInput,
   parseMediaFilters,
+  readMediaFormData,
 } from "./utils";
 
 describe("normalizeMediaInput", () => {
@@ -76,6 +77,46 @@ describe("normalizeMediaInput", () => {
         releaseDate: "上映/出版日期格式不正确。",
       },
     });
+  });
+});
+
+describe("readMediaFormData", () => {
+  it("reads FormData and normalizes tags and spoiler state", () => {
+    const formData = new FormData();
+    formData.set("type", "MOVIE");
+    formData.set("title", "  Arrival ");
+    formData.set("originalTitle", " Arrival ");
+    formData.set("creator", " Denis Villeneuve ");
+    formData.set("year", "2016");
+    formData.set("coverUrl", " https://example.com/cover.jpg ");
+    formData.set("status", "DONE");
+    formData.set("rating", "9");
+    formData.set("startedAt", "2026-06-01");
+    formData.set("finishedAt", "2026-06-02");
+    formData.set("releaseDate", "2016-11-11");
+    formData.set("reviewMd", " Notes ");
+    formData.set("hasSpoiler", "on");
+    formData.set("tags", "sci-fi, film, sci-fi,,");
+
+    const result = readMediaFormData(formData);
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        type: "MOVIE",
+        title: "Arrival",
+        originalTitle: "Arrival",
+        creator: "Denis Villeneuve",
+        year: 2016,
+        coverUrl: "https://example.com/cover.jpg",
+        status: "DONE",
+        rating: 9,
+        reviewMd: "Notes",
+        hasSpoiler: true,
+        tags: ["sci-fi", "film"],
+      },
+    });
+    expect(result.ok && result.data.startedAt).toBeInstanceOf(Date);
   });
 });
 

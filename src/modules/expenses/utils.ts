@@ -61,6 +61,21 @@ export type NormalizedManualTransactionInput =
       errors: Partial<Record<"amount" | "direction" | "categoryId" | "date", string>>;
     };
 
+export type ExpenseCategoryFormDataResult =
+  | {
+      ok: true;
+      data: {
+        name: string;
+        direction: ManualDirectionValue;
+        icon: string | null;
+        keywords: string[];
+      };
+    }
+  | {
+      ok: false;
+      errors: Partial<Record<"name" | "direction" | "icon" | "keywords", string>>;
+    };
+
 export type TransactionForGrouping = {
   id: string;
   txnDate: string;
@@ -206,6 +221,69 @@ export function normalizeManualTransactionInput(
       item: null,
       payMethod: null,
       note: note || null,
+    },
+  };
+}
+
+function readKeywords(formData: FormData) {
+  return Array.from(
+    new Set(
+      stringValue(formData.get("keywords"))
+        .split(",")
+        .map((keyword) => keyword.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+export function readManualTransactionFormData(formData: FormData, categories: ExpenseCategoryOption[]) {
+  return normalizeManualTransactionInput(
+    {
+      amount: formData.get("amount"),
+      direction: formData.get("direction"),
+      categoryId: formData.get("categoryId"),
+      date: formData.get("date"),
+      merchant: formData.get("merchant"),
+      note: formData.get("note"),
+    },
+    categories,
+  );
+}
+
+export function readExpenseCategoryFormData(formData: FormData): ExpenseCategoryFormDataResult {
+  const name = stringValue(formData.get("name"));
+  const direction = stringValue(formData.get("direction"));
+  const icon = stringValue(formData.get("icon"));
+  const keywords = readKeywords(formData);
+  const errors: Extract<ExpenseCategoryFormDataResult, { ok: false }>["errors"] = {};
+
+  if (!name) {
+    errors.name = "分类名称不能为空。";
+  }
+
+  if (!isManualDirection(direction)) {
+    errors.direction = "请选择支出或收入。";
+  }
+
+  if (icon.length > 8) {
+    errors.icon = "图标请控制在 8 个字符以内。";
+  }
+
+  if (keywords.length === 0) {
+    errors.keywords = "至少保留一个关键词。";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
+
+  return {
+    ok: true,
+    data: {
+      name,
+      direction: direction as ManualDirectionValue,
+      icon: icon || null,
+      keywords,
     },
   };
 }

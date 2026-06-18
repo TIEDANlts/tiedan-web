@@ -311,6 +311,28 @@ export function normalizeMediaInput(input: MediaInput): NormalizedMediaInput {
   };
 }
 
+export function readMediaFormData(formData: FormData) {
+  return normalizeMediaInput({
+    type: formData.get("type"),
+    title: formData.get("title"),
+    originalTitle: formData.get("originalTitle"),
+    creator: formData.get("creator"),
+    year: formData.get("year"),
+    coverUrl: formData.get("coverUrl"),
+    doubanId: formData.get("doubanId"),
+    tmdbId: formData.get("tmdbId"),
+    isbn: formData.get("isbn"),
+    status: formData.get("status"),
+    rating: formData.get("rating"),
+    startedAt: formData.get("startedAt"),
+    finishedAt: formData.get("finishedAt"),
+    releaseDate: formData.get("releaseDate"),
+    reviewMd: formData.get("reviewMd"),
+    hasSpoiler: formData.get("hasSpoiler"),
+    tags: formData.get("tags"),
+  });
+}
+
 function firstParamValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }

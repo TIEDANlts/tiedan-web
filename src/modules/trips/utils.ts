@@ -184,6 +184,19 @@ export function normalizeTripInput(input: TripInput): NormalizedTripInput {
   };
 }
 
+export function readTripFormData(formData: FormData, options: { includeSummary?: boolean } = {}) {
+  return normalizeTripInput({
+    title: formData.get("title"),
+    startDate: formData.get("startDate"),
+    endDate: formData.get("endDate"),
+    destinations: formData.get("destinations"),
+    coverUrl: formData.get("coverUrl"),
+    status: formData.get("status"),
+    summaryMd: options.includeSummary ? formData.get("summaryMd") : null,
+    budget: formData.get("budget"),
+  });
+}
+
 export function parseTripLocations(value: unknown): TripLocation[] {
   if (!Array.isArray(value)) {
     return [];

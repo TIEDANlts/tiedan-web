@@ -24,14 +24,11 @@ import { moduleColors, moduleLabels } from "@/lib/design";
 import { cn } from "@/lib/utils";
 import type { CalendarEvent, CalendarEventModule } from "@/lib/calendar";
 import { SpecialDayQuickForm } from "@/modules/special-days/special-day-quick-form";
-import { createTodoAction, type TodoActionState } from "@/modules/todos/actions";
+import { createTodoAction } from "@/modules/todos/actions";
+import { initialTodoActionState } from "@/modules/todos/action-state";
 
 const moduleOrder: CalendarEventModule[] = ["todos", "trips", "specialDays", "media"];
 const hiddenModulesKey = "calendar:hiddenModules:v1";
-const initialTodoState: TodoActionState = {
-  ok: false,
-  message: null,
-};
 
 type CalendarView = "dayGridMonth" | "listWeek";
 type Range = {
@@ -111,7 +108,7 @@ function TodoQuickForm({
   date: string;
   onSaved?: () => void;
 }) {
-  const [state, formAction, pending] = useActionState(createTodoAction, initialTodoState);
+  const [state, formAction, pending] = useActionState(createTodoAction, initialTodoActionState);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {

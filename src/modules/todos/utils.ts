@@ -24,6 +24,88 @@ export type FutureDayGroup = {
   items: TodoListItem[];
 };
 
+export type CreateTodoFormDataResult =
+  | {
+      ok: true;
+      data: {
+        content: string;
+        date: Date | null;
+        priority: number;
+      };
+    }
+  | {
+      ok: false;
+      errors: Partial<Record<"content" | "date" | "priority" | "target", string>>;
+    };
+
+function readString(value: FormDataEntryValue | null) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function normalizeTodoPriority(value: FormDataEntryValue | string | number | null) {
+  const priority = Number(value);
+
+  if (priority === 0 || priority === 1 || priority === 2) {
+    return priority;
+  }
+
+  return 0;
+}
+
+function normalizeDateInput(value: FormDataEntryValue | string | null) {
+  const date = typeof value === "string" ? value.trim() : "";
+
+  if (!date) {
+    return null;
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return null;
+  }
+
+  return date;
+}
+
+export function dateToTodoDb(date: string | null) {
+  return date ? new Date(`${date}T00:00:00.000Z`) : null;
+}
+
+export function readCreateTodoFormData(formData: FormData, today = getShanghaiTodayDate()): CreateTodoFormDataResult {
+  const content = readString(formData.get("content"));
+  const target = readString(formData.get("target")) || "today";
+  const dateInput = normalizeDateInput(formData.get("date"));
+  const errors: Extract<CreateTodoFormDataResult, { ok: false }>["errors"] = {};
+
+  if (!content) {
+    errors.content = "写点具体要做的事。";
+  }
+
+  let date: string | null = today;
+  if (target === "inbox") {
+    date = null;
+  } else if (target === "date") {
+    if (!dateInput) {
+      errors.date = "请选择一个日期。";
+    }
+    date = dateInput;
+  } else if (target !== "today") {
+    errors.target = "请选择有效的添加位置。";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
+
+  return {
+    ok: true,
+    data: {
+      content,
+      date: dateToTodoDb(date),
+      priority: normalizeTodoPriority(formData.get("priority")),
+    },
+  };
+}
+
 export function normalizeTodoDate(value: TodoDateValue) {
   if (!value) {
     return null;

@@ -5,6 +5,7 @@ import {
   nextGameStatus,
   normalizeGameInput,
   parseGameFilters,
+  readGameFormData,
 } from "./utils";
 
 describe("normalizeGameInput", () => {
@@ -63,6 +64,38 @@ describe("normalizeGameInput", () => {
         lastPlayedAt: "最近游玩时间格式不正确。",
       },
     });
+  });
+});
+
+describe("readGameFormData", () => {
+  it("reads FormData and normalizes tags", () => {
+    const formData = new FormData();
+    formData.set("name", "  Celeste  ");
+    formData.set("platform", "  Steam ");
+    formData.set("coverUrl", " https://example.com/cover.jpg ");
+    formData.set("status", "FINISHED");
+    formData.set("rating", "10");
+    formData.set("playtimeHours", "2.5");
+    formData.set("lastPlayedAt", "2026-06-14T20:30");
+    formData.set("tags", "platformer, indie, platformer,,");
+    formData.set("reviewMd", " Great ");
+
+    const result = readGameFormData(formData);
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        name: "Celeste",
+        platform: "Steam",
+        coverUrl: "https://example.com/cover.jpg",
+        status: "FINISHED",
+        rating: 10,
+        playtimeMin: 150,
+        tags: ["platformer", "indie"],
+        reviewMd: "Great",
+      },
+    });
+    expect(result.ok && result.data.lastPlayedAt).toBeInstanceOf(Date);
   });
 });
 

@@ -5,6 +5,7 @@ import {
   getOverdueDays,
   isOverdue,
   moveOverdueToTodayInput,
+  readCreateTodoFormData,
 } from "./utils";
 
 describe("todo date logic", () => {
@@ -57,5 +58,37 @@ describe("todo date logic", () => {
     );
 
     expect(updates).toEqual([{ id: "overdue", date: "2026-03-01" }]);
+  });
+});
+
+describe("readCreateTodoFormData", () => {
+  test("creates a today todo by default", () => {
+    const formData = new FormData();
+    formData.set("content", "  Write notes ");
+    formData.set("target", "today");
+    formData.set("priority", "2");
+
+    const result = readCreateTodoFormData(formData, "2026-06-18");
+
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        content: "Write notes",
+        date: new Date("2026-06-18T00:00:00.000Z"),
+        priority: 2,
+      },
+    });
+  });
+
+  test("rejects invalid custom dates", () => {
+    const formData = new FormData();
+    formData.set("content", "Write notes");
+    formData.set("target", "date");
+    formData.set("date", "bad-date");
+
+    const result = readCreateTodoFormData(formData, "2026-06-18");
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.errors.date).toBeTruthy();
   });
 });

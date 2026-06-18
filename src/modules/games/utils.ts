@@ -226,6 +226,20 @@ export function normalizeGameInput(input: GameInput): NormalizedGameInput {
   };
 }
 
+export function readGameFormData(formData: FormData) {
+  return normalizeGameInput({
+    name: formData.get("name"),
+    platform: formData.get("platform"),
+    coverUrl: formData.get("coverUrl"),
+    status: formData.get("status"),
+    rating: formData.get("rating"),
+    playtimeHours: formData.get("playtimeHours"),
+    lastPlayedAt: formData.get("lastPlayedAt"),
+    tags: formData.get("tags"),
+    reviewMd: formData.get("reviewMd"),
+  });
+}
+
 function firstParamValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }

@@ -9,6 +9,13 @@
 
 ## 修复日志
 
+### 2026-06-18 · Server Action 与表单解析维护性重构
+- 完成内容：完成优化计划方案 B。posts/games/media/trips/expenses/todos 六个模块的 Server Action 本地鉴权 helper 统一为模块语义命名；FormData 读取逻辑迁移到各模块 `utils.ts` 的纯 parser；目标模块的 action state 类型与初始状态移到 `action-state.ts`，客户端初始 state 不再从 `"use server"` 文件旁路导出。Server Action 名称、参数、中文文案、前端交互和数据库写入语义保持不变。
+- 关键文件：`src/modules/*/actions.ts`、`src/modules/*/utils.ts`、`src/modules/*/action-state.ts`、`src/lib/action-auth.test.ts`、`src/lib/server-action-exports.test.ts`，以及 posts/games/media/trips/expenses/todos 对应模块测试和客户端表单入口。
+- 关键决定与偏离：未新增第三方依赖，未修改 Prisma schema，未抽全局 `requireSession()`；expenses 只迁移手动记账与分类 parser，导入流程保持原结构；README 未更新，因为启动、验证、数据库和缓存策略没有变化。
+- 遗留 TODO：继续按计划推进方案 C（大 Client 组件拆分）；方案 D2/D3 仍需单独分支、迁移/缓存验收计划后再实施。
+- 验证：`npx.cmd vitest run src/lib/server-action-exports.test.ts src/lib/action-auth.test.ts` 通过（2 个测试文件，8 条测试）；`npx.cmd vitest run src/modules/posts/posts.test.ts src/modules/games/games.test.ts src/modules/media/media.test.ts src/modules/trips/trips.test.ts src/modules/expenses/expenses.test.ts src/modules/todos/todos.test.ts` 通过（6 个测试文件，45 条测试）；`npm.cmd run check` 通过（48 个测试文件，263 条测试）。
+
 ### 2026-06-18 · 收官后上传、远程图片与 Activity 诊断加固
 - 完成内容：完成优化计划方案 A。前端所有 `/api/upload` 调用入口统一走 `src/lib/upload-client.ts`，在本地先做 15MB 与图片格式预检；上传 API 返回稳定 `code + error`，可区分文件过大、格式不支持、登录失效、缺少文件和服务端处理失败。`src/lib/http.ts` 新增 `OutboundFetchError`，`src/lib/storage.ts` 的 `StorageError` 增加稳定错误码，远程图片转存可区分远端过大、下载失败、内容类型不支持和 SSRF 拦截；游戏/书影后台表单按错误码展示更准确中文文案。新增只读 `findOrphanActivities()`，可诊断 posts/media/trips/expenses Activity 指向已删除记录的 orphan 项，暂不自动清理。
 - 关键文件：`src/lib/upload-client.ts`、`src/app/api/upload/route.ts`、`src/lib/http.ts`、`src/lib/storage.ts`、`src/lib/activity-diagnostics.ts`、`src/app/(private)/**` 上传入口、`src/modules/games/actions.ts`、`src/modules/media/actions.ts`，以及对应单测。

@@ -18,14 +18,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { uploadImageFile } from "@/lib/upload-client";
 import { cn } from "@/lib/utils";
-import { createTripAction, type TripActionState } from "@/modules/trips/actions";
+import { createTripAction } from "@/modules/trips/actions";
+import { initialTripActionState, type TripActionState } from "@/modules/trips/action-state";
 import type { TripListItem, TripsPageData } from "@/modules/trips/queries";
 import { tripStatusLabels, type TripStatusValue } from "@/modules/trips/utils";
-
-const initialActionState: TripActionState = {
-  ok: false,
-  message: null,
-};
 
 function statusHref(pathname: string, status: TripStatusValue) {
   return status === "DONE" ? `${pathname}?status=DONE` : pathname;
@@ -133,7 +129,7 @@ function TripCoverInput({ coverUrl, setCoverUrl, error }: { coverUrl: string; se
 function AddTripDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [state, formAction, pending] = useActionState(createAndNavigate, initialActionState);
+  const [state, formAction, pending] = useActionState(createAndNavigate, initialTripActionState);
   const [destinations, setDestinations] = useState<string[]>([]);
   const [coverUrl, setCoverUrl] = useState("");
 

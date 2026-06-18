@@ -16,15 +16,10 @@ import {
   toggleTodoDoneAction,
   updateTodoDateAction,
   updateTodoPriorityAction,
-  type TodoActionState,
 } from "@/modules/todos/actions";
+import { initialTodoActionState } from "@/modules/todos/action-state";
 import type { TodayTodoItem, TodosPageData } from "@/modules/todos/queries";
 import type { FutureDayGroup, TodoListItem } from "@/modules/todos/utils";
-
-const initialState: TodoActionState = {
-  ok: false,
-  message: null,
-};
 
 const targetOptions = [
   { value: "today", label: "今天" },
@@ -93,7 +88,7 @@ function SectionShell({
 function QuickAdd({ today }: { today: string }) {
   const [target, setTarget] = useState<AddTarget>("today");
   const [pickedDate, setPickedDate] = useState(today);
-  const [state, formAction, pending] = useActionState(createTodoAction, initialState);
+  const [state, formAction, pending] = useActionState(createTodoAction, initialTodoActionState);
   const inputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 

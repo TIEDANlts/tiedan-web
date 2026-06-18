@@ -6,57 +6,20 @@ import { auth } from "@/auth";
 import { gameFinishedTitle, recordActivity, shouldRecordStatusTransition } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { remoteImageErrorMessage, saveFromUrl } from "@/lib/storage";
+import type { GameActionState, SteamSyncActionState } from "@/modules/games/action-state";
 import {
   type GameStatusValue,
   nextGameStatus,
-  normalizeGameInput,
+  readGameFormData,
 } from "@/modules/games/utils";
 import { syncSteamLibrary } from "@/modules/games/steam";
 
-export type GameActionState = {
-  ok: boolean;
-  message: string | null;
-  gameId?: string;
-  warning?: string;
-  errors?: Partial<
-    Record<"name" | "platform" | "coverUrl" | "status" | "rating" | "playtimeHours" | "lastPlayedAt" | "form", string>
-  >;
-};
-
-export type SteamSyncActionState = {
-  ok: boolean;
-  message: string;
-  added?: number;
-  updated?: number;
-};
-
-async function requireSession() {
+async function requireGameSession() {
   const session = await auth();
 
   if (!session?.user) {
     throw new Error("请先登录后再管理游戏。");
   }
-}
-
-function readTags(formData: FormData) {
-  return String(formData.get("tags") ?? "")
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-}
-
-function readGameInput(formData: FormData) {
-  return normalizeGameInput({
-    name: formData.get("name"),
-    platform: formData.get("platform"),
-    coverUrl: formData.get("coverUrl"),
-    status: formData.get("status"),
-    rating: formData.get("rating"),
-    playtimeHours: formData.get("playtimeHours"),
-    lastPlayedAt: formData.get("lastPlayedAt"),
-    tags: readTags(formData),
-    reviewMd: formData.get("reviewMd"),
-  });
 }
 
 function isSteamCdnCover(url: string) {
@@ -90,9 +53,9 @@ export async function createGameAction(
   _previousState: GameActionState,
   formData: FormData,
 ): Promise<GameActionState> {
-  await requireSession();
+  await requireGameSession();
 
-  const input = readGameInput(formData);
+  const input = readGameFormData(formData);
   if (!input.ok) {
     return { ok: false, message: "请检查游戏信息。", errors: input.errors };
   }
@@ -130,14 +93,14 @@ export async function updateGameAction(
   _previousState: GameActionState,
   formData: FormData,
 ): Promise<GameActionState> {
-  await requireSession();
+  await requireGameSession();
 
   const id = String(formData.get("id") ?? "");
   if (!id) {
     return { ok: false, message: "缺少要编辑的游戏。", errors: { form: "游戏不存在。" } };
   }
 
-  const input = readGameInput(formData);
+  const input = readGameFormData(formData);
   if (!input.ok) {
     return { ok: false, message: "请检查游戏信息。", errors: input.errors };
   }
@@ -185,7 +148,7 @@ export async function updateGameAction(
 }
 
 export async function advanceGameStatusAction(id: string) {
-  await requireSession();
+  await requireGameSession();
 
   const game = await db.game.findUnique({
     where: { id },
@@ -220,7 +183,7 @@ export async function advanceGameStatusAction(id: string) {
 }
 
 export async function syncSteamLibraryAction(): Promise<SteamSyncActionState> {
-  await requireSession();
+  await requireGameSession();
 
   try {
     const result = await syncSteamLibrary();

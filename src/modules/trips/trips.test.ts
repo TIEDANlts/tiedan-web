@@ -6,6 +6,7 @@ import {
   normalizeTripInput,
   planTripDaySync,
   parseTripLocations,
+  readTripFormData,
   tripDaysCount,
 } from "./utils";
 
@@ -81,6 +82,36 @@ describe("normalizeTripInput", () => {
 
     expect(result.ok).toBe(false);
     expect(result.ok ? null : result.errors.endDate).toBe("结束日期不能早于开始日期。");
+  });
+});
+
+describe("readTripFormData", () => {
+  it("reads FormData and keeps summary optional", () => {
+    const formData = new FormData();
+    formData.set("title", "  Hangzhou ");
+    formData.set("startDate", "2026-06-15");
+    formData.set("endDate", "2026-06-17");
+    formData.set("destinations", "Hangzhou, West Lake, Hangzhou,,");
+    formData.set("coverUrl", "/uploads/trips/covers/a.webp");
+    formData.set("status", "DONE");
+    formData.set("summaryMd", " Trip notes ");
+    formData.set("budget", "1200.50");
+
+    const result = readTripFormData(formData, { includeSummary: true });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        title: "Hangzhou",
+        startDate: new Date("2026-06-15T00:00:00.000Z"),
+        endDate: new Date("2026-06-17T00:00:00.000Z"),
+        destinations: ["Hangzhou", "West Lake"],
+        coverUrl: "/uploads/trips/covers/a.webp",
+        status: "DONE",
+        summaryMd: "Trip notes",
+      },
+    });
+    expect(result.ok && result.data.budget?.toFixed(2)).toBe("1200.50");
   });
 });
 
