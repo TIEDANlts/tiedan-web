@@ -10,9 +10,8 @@ import { detectExpenseImportPlatform, parseExpenseImportFile, type ExpenseImport
 import { categorizeExpenseTransaction } from "@/modules/expenses/categorize";
 import { getExpenseCategoriesForCategorize, getExpenseCategoryOptions } from "@/modules/expenses/category-options";
 import {
-  isManualDirection,
-  normalizeManualTransactionInput,
-  type ManualDirectionValue,
+  readExpenseCategoryFormData,
+  readManualTransactionFormData,
 } from "@/modules/expenses/utils";
 
 export type ExpenseActionState = {
@@ -21,7 +20,7 @@ export type ExpenseActionState = {
   errors?: Partial<Record<"amount" | "direction" | "categoryId" | "date" | "name" | "icon" | "keywords", string>>;
 };
 
-async function requireSession() {
+async function requireExpenseSession() {
   const session = await auth();
 
   if (!session?.user) {
@@ -37,21 +36,6 @@ function revalidateExpenses() {
   revalidatePath("/admin/expense-categories");
 }
 
-function stringValue(value: unknown) {
-  return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
-}
-
-function readKeywords(formData: FormData) {
-  return Array.from(
-    new Set(
-      stringValue(formData.get("keywords"))
-        .split(",")
-        .map((keyword) => keyword.trim())
-        .filter(Boolean),
-    ),
-  );
-}
-
 async function nextCategorySort() {
   const aggregate = await db.expenseCategory.aggregate({
     _max: { sort: true },
@@ -60,61 +44,13 @@ async function nextCategorySort() {
   return (aggregate._max.sort ?? 0) + 10;
 }
 
-function readCategoryInput(formData: FormData) {
-  const name = stringValue(formData.get("name"));
-  const direction = stringValue(formData.get("direction"));
-  const icon = stringValue(formData.get("icon"));
-  const keywords = readKeywords(formData);
-  const errors: ExpenseActionState["errors"] = {};
-
-  if (!name) {
-    errors.name = "分类名称不能为空。";
-  }
-
-  if (!isManualDirection(direction)) {
-    errors.direction = "请选择支出或收入。";
-  }
-
-  if (icon.length > 8) {
-    errors.icon = "图标请控制在 8 个字符以内。";
-  }
-
-  if (keywords.length === 0) {
-    errors.keywords = "至少保留一个关键词。";
-  }
-
-  if (Object.keys(errors).length > 0) {
-    return { ok: false as const, errors };
-  }
-
-  return {
-    ok: true as const,
-    data: {
-      name,
-      direction: direction as ManualDirectionValue,
-      icon: icon || null,
-      keywords,
-    },
-  };
-}
-
 export async function createManualTransactionAction(
   _previousState: ExpenseActionState,
   formData: FormData,
 ): Promise<ExpenseActionState> {
-  await requireSession();
+  await requireExpenseSession();
 
-  const normalized = normalizeManualTransactionInput(
-    {
-      amount: formData.get("amount"),
-      direction: formData.get("direction"),
-      categoryId: formData.get("categoryId"),
-      date: formData.get("date"),
-      merchant: formData.get("merchant"),
-      note: formData.get("note"),
-    },
-    await getExpenseCategoryOptions(),
-  );
+  const normalized = readManualTransactionFormData(formData, await getExpenseCategoryOptions());
 
   if (!normalized.ok) {
     return { ok: false, message: "请检查记账信息。", errors: normalized.errors };
@@ -142,7 +78,7 @@ export async function createManualTransactionAction(
 }
 
 export async function updateTransactionCategoryAction(id: string, categoryId: string | null) {
-  await requireSession();
+  await requireExpenseSession();
 
   const transaction = await db.transaction.findUnique({
     where: { id },
@@ -184,7 +120,7 @@ export async function updateTransactionCategoryWithRuleAction(
   categoryId: string | null,
   rememberMerchant: boolean,
 ) {
-  await requireSession();
+  await requireExpenseSession();
 
   const transaction = await db.transaction.findUnique({
     where: { id },
@@ -214,7 +150,7 @@ export async function updateTransactionCategoryWithRuleAction(
 }
 
 export async function deleteTransactionAction(id: string) {
-  await requireSession();
+  await requireExpenseSession();
 
   await db.transaction.deleteMany({
     where: { id },
@@ -227,9 +163,9 @@ export async function createExpenseCategoryAction(
   _previousState: ExpenseActionState,
   formData: FormData,
 ): Promise<ExpenseActionState> {
-  await requireSession();
+  await requireExpenseSession();
 
-  const input = readCategoryInput(formData);
+  const input = readExpenseCategoryFormData(formData);
   if (!input.ok) {
     return { ok: false, message: "请检查分类信息。", errors: input.errors };
   }
@@ -254,14 +190,14 @@ export async function updateExpenseCategoryAction(
   _previousState: ExpenseActionState,
   formData: FormData,
 ): Promise<ExpenseActionState> {
-  await requireSession();
+  await requireExpenseSession();
 
-  const id = stringValue(formData.get("id"));
+  const id = typeof formData.get("id") === "string" ? String(formData.get("id")).trim() : "";
   if (!id) {
     return { ok: false, message: "缺少要编辑的分类。" };
   }
 
-  const input = readCategoryInput(formData);
+  const input = readExpenseCategoryFormData(formData);
   if (!input.ok) {
     return { ok: false, message: "请检查分类信息。", errors: input.errors };
   }
@@ -299,7 +235,7 @@ export async function updateExpenseCategoryAction(
 }
 
 export async function deleteExpenseCategoryAction(id: string) {
-  await requireSession();
+  await requireExpenseSession();
 
   await db.$transaction([
     db.transaction.updateMany({
@@ -315,7 +251,7 @@ export async function deleteExpenseCategoryAction(id: string) {
 }
 
 export async function reorderExpenseCategoriesAction(orderedIds: string[]) {
-  await requireSession();
+  await requireExpenseSession();
 
   const categories = await db.expenseCategory.findMany({
     select: { id: true },
@@ -391,7 +327,7 @@ async function existingTxnNos(platform: ExpenseImportPlatform, txnNos: string[])
 }
 
 export async function parseExpenseImportFileAction(formData: FormData): Promise<ExpenseImportParseState> {
-  await requireSession();
+  await requireExpenseSession();
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -421,7 +357,7 @@ export async function previewExpenseImportAction(input: {
   fileName: string;
   platform: ExpenseImportPlatform;
 }): Promise<ExpenseImportPreviewState> {
-  await requireSession();
+  await requireExpenseSession();
 
   if (!isExpenseImportPlatform(input.platform)) {
     return { ok: false, message: "请选择账单平台。" };
@@ -448,7 +384,7 @@ export async function executeExpenseImportAction(input: {
   fileName: string;
   platform: ExpenseImportPlatform;
 }): Promise<ExpenseImportExecuteState> {
-  await requireSession();
+  await requireExpenseSession();
 
   if (!isExpenseImportPlatform(input.platform)) {
     return { ok: false, message: "请选择账单平台。" };

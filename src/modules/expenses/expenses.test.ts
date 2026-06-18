@@ -8,6 +8,8 @@ import {
   monthRange,
   normalizeManualTransactionInput,
   parseExpenseFilters,
+  readExpenseCategoryFormData,
+  readManualTransactionFormData,
 } from "./utils";
 
 const categories = [
@@ -100,6 +102,65 @@ describe("normalizeManualTransactionInput", () => {
         categoryId: "请选择当前方向下的分类。",
       },
     });
+  });
+});
+
+describe("readManualTransactionFormData", () => {
+  it("reads manual transaction FormData without using floating point math", () => {
+    const formData = new FormData();
+    formData.set("amount", "0.1");
+    formData.set("direction", "EXPENSE");
+    formData.set("categoryId", "food");
+    formData.set("date", "2026-06-15");
+    formData.set("merchant", " Cafe ");
+    formData.set("note", " Breakfast ");
+
+    const result = readManualTransactionFormData(formData, categories);
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        platform: "manual",
+        txnNo: null,
+        direction: "EXPENSE",
+        categoryId: "food",
+        merchant: "Cafe",
+        note: "Breakfast",
+      },
+    });
+    expect(result.ok && result.data.amount.toFixed(2)).toBe("0.10");
+  });
+});
+
+describe("readExpenseCategoryFormData", () => {
+  it("deduplicates category keywords", () => {
+    const formData = new FormData();
+    formData.set("name", " Food ");
+    formData.set("direction", "EXPENSE");
+    formData.set("icon", "🍜");
+    formData.set("keywords", "coffee, lunch, coffee,,");
+
+    expect(readExpenseCategoryFormData(formData)).toEqual({
+      ok: true,
+      data: {
+        name: "Food",
+        direction: "EXPENSE",
+        icon: "🍜",
+        keywords: ["coffee", "lunch"],
+      },
+    });
+  });
+
+  it("rejects categories without keywords", () => {
+    const formData = new FormData();
+    formData.set("name", " Food ");
+    formData.set("direction", "EXPENSE");
+    formData.set("keywords", "");
+
+    const result = readExpenseCategoryFormData(formData);
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.errors.keywords).toBeTruthy();
   });
 });
 

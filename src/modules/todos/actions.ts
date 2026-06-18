@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { getShanghaiTodayDate } from "@/modules/todos/utils";
+import {
+  dateToTodoDb,
+  getShanghaiTodayDate,
+  normalizeTodoPriority,
+  readCreateTodoFormData,
+} from "@/modules/todos/utils";
 
 export type TodoActionState = {
   ok: boolean;
@@ -12,7 +17,7 @@ export type TodoActionState = {
   errors?: Partial<Record<"content" | "date" | "priority" | "target", string>>;
 };
 
-async function requireSession() {
+async function requireTodoSession() {
   const session = await auth();
 
   if (!session?.user) {
@@ -25,75 +30,19 @@ function revalidateTodos() {
   revalidatePath("/");
 }
 
-function readString(value: FormDataEntryValue | null) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizePriority(value: FormDataEntryValue | string | number | null) {
-  const priority = Number(value);
-
-  if (priority === 0 || priority === 1 || priority === 2) {
-    return priority;
-  }
-
-  return 0;
-}
-
-function normalizeDateInput(value: FormDataEntryValue | string | null) {
-  const date = typeof value === "string" ? value.trim() : "";
-
-  if (!date) {
-    return null;
-  }
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return null;
-  }
-
-  return date;
-}
-
-function dateToDb(date: string | null) {
-  return date ? new Date(`${date}T00:00:00.000Z`) : null;
-}
-
 export async function createTodoAction(
   _previousState: TodoActionState,
   formData: FormData,
 ): Promise<TodoActionState> {
-  await requireSession();
+  await requireTodoSession();
 
-  const content = readString(formData.get("content"));
-  const target = readString(formData.get("target")) || "today";
-  const dateInput = normalizeDateInput(formData.get("date"));
-  const errors: TodoActionState["errors"] = {};
-
-  if (!content) {
-    errors.content = "写点具体要做的事。";
-  }
-
-  let date: string | null = getShanghaiTodayDate();
-  if (target === "inbox") {
-    date = null;
-  } else if (target === "date") {
-    if (!dateInput) {
-      errors.date = "请选择一个日期。";
-    }
-    date = dateInput;
-  } else if (target !== "today") {
-    errors.target = "请选择有效的添加位置。";
-  }
-
-  if (Object.keys(errors).length > 0) {
-    return { ok: false, message: "请检查待办内容。", errors };
+  const input = readCreateTodoFormData(formData);
+  if (!input.ok) {
+    return { ok: false, message: "请检查待办内容。", errors: input.errors };
   }
 
   await db.todo.create({
-    data: {
-      content,
-      date: dateToDb(date),
-      priority: normalizePriority(formData.get("priority")),
-    },
+    data: input.data,
   });
 
   revalidateTodos();
@@ -102,7 +51,7 @@ export async function createTodoAction(
 }
 
 export async function toggleTodoDoneAction(id: string, done: boolean) {
-  await requireSession();
+  await requireTodoSession();
 
   await db.todo.update({
     where: { id },
@@ -116,29 +65,29 @@ export async function toggleTodoDoneAction(id: string, done: boolean) {
 }
 
 export async function updateTodoPriorityAction(id: string, priority: number) {
-  await requireSession();
+  await requireTodoSession();
 
   await db.todo.update({
     where: { id },
-    data: { priority: normalizePriority(priority) },
+    data: { priority: normalizeTodoPriority(priority) },
   });
 
   revalidateTodos();
 }
 
 export async function updateTodoDateAction(id: string, date: string | null) {
-  await requireSession();
+  await requireTodoSession();
 
   await db.todo.update({
     where: { id },
-    data: { date: dateToDb(date) },
+    data: { date: dateToTodoDb(date) },
   });
 
   revalidateTodos();
 }
 
 export async function deleteTodoAction(id: string) {
-  await requireSession();
+  await requireTodoSession();
 
   await db.todo.delete({
     where: { id },
@@ -148,7 +97,7 @@ export async function deleteTodoAction(id: string) {
 }
 
 export async function postponeOverdueTodosAction() {
-  await requireSession();
+  await requireTodoSession();
 
   const today = getShanghaiTodayDate();
 
@@ -156,11 +105,11 @@ export async function postponeOverdueTodosAction() {
     where: {
       done: false,
       date: {
-        lt: dateToDb(today) ?? undefined,
+        lt: dateToTodoDb(today) ?? undefined,
       },
     },
     data: {
-      date: dateToDb(today),
+      date: dateToTodoDb(today),
     },
   });
 

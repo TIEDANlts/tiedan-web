@@ -6,13 +6,14 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { recordActivity, shouldRecordStatusTransition, tripDoneTitle } from "@/lib/activity";
 import { db } from "@/lib/db";
+import { formatShanghaiDate } from "@/lib/dayjs";
 import { gcj02ToWgs84 } from "@/lib/geo";
 import {
   dateFromInput,
   enumerateTripDates,
-  normalizeTripInput,
   planTripDaySync,
   parseTripLocations,
+  readTripFormData,
   type TripLocation,
 } from "@/modules/trips/utils";
 
@@ -23,16 +24,12 @@ export type TripActionState = {
   errors?: Partial<Record<"title" | "startDate" | "endDate" | "destinations" | "coverUrl" | "status" | "budget" | "form", string>>;
 };
 
-async function requireSession() {
+async function requireTripSession() {
   const session = await auth();
 
   if (!session?.user) {
     throw new Error("请先登录后再管理旅行。");
   }
-}
-
-function readDestinations(formData: FormData) {
-  return String(formData.get("destinations") ?? "");
 }
 
 function revalidateTrips(id?: string) {
@@ -46,17 +43,9 @@ function revalidateTrips(id?: string) {
 
 export async function createTripAction(_state: TripActionState, formData: FormData): Promise<TripActionState> {
   void _state;
-  await requireSession();
+  await requireTripSession();
 
-  const input = normalizeTripInput({
-    title: formData.get("title"),
-    startDate: formData.get("startDate"),
-    endDate: formData.get("endDate"),
-    destinations: readDestinations(formData),
-    coverUrl: formData.get("coverUrl"),
-    status: formData.get("status"),
-    budget: formData.get("budget"),
-  });
+  const input = readTripFormData(formData);
 
   if (!input.ok) {
     return { ok: false, message: "请检查行程信息。", errors: input.errors };
@@ -67,8 +56,8 @@ export async function createTripAction(_state: TripActionState, formData: FormDa
       ...input.data,
       days: {
         create: enumerateTripDates(
-          String(formData.get("startDate")),
-          String(formData.get("endDate")),
+          formatShanghaiDate(input.data.startDate),
+          formatShanghaiDate(input.data.endDate),
         ).map((date) => ({ date: dateFromInput(date) })),
       },
     },
@@ -81,7 +70,7 @@ export async function createTripAction(_state: TripActionState, formData: FormDa
 
 export async function updateTripOverviewAction(_state: TripActionState, formData: FormData): Promise<TripActionState> {
   void _state;
-  await requireSession();
+  await requireTripSession();
 
   const id = String(formData.get("id") ?? "");
   if (!id) {
@@ -104,22 +93,13 @@ export async function updateTripOverviewAction(_state: TripActionState, formData
     return { ok: false, message: "行程不存在。", errors: { form: "行程不存在。" } };
   }
 
-  const input = normalizeTripInput({
-    title: formData.get("title"),
-    startDate: formData.get("startDate"),
-    endDate: formData.get("endDate"),
-    destinations: readDestinations(formData),
-    coverUrl: formData.get("coverUrl"),
-    status: formData.get("status"),
-    summaryMd: formData.get("summaryMd"),
-    budget: formData.get("budget"),
-  });
+  const input = readTripFormData(formData, { includeSummary: true });
 
   if (!input.ok) {
     return { ok: false, message: "请检查行程信息。", errors: input.errors };
   }
 
-  const nextDates = enumerateTripDates(String(formData.get("startDate")), String(formData.get("endDate")));
+  const nextDates = enumerateTripDates(formatShanghaiDate(input.data.startDate), formatShanghaiDate(input.data.endDate));
   const daySync = planTripDaySync(existing.days, nextDates);
 
   await db.$transaction(async (tx) => {
@@ -152,7 +132,7 @@ export async function updateTripOverviewAction(_state: TripActionState, formData
 }
 
 export async function saveChecklistAction(tripId: string, checklist: Array<{ id: string; text: string; done: boolean }>) {
-  await requireSession();
+  await requireTripSession();
 
   const normalized = checklist
     .map((item) => ({
@@ -173,7 +153,7 @@ export async function saveChecklistAction(tripId: string, checklist: Array<{ id:
 }
 
 export async function updateTripDayNoteAction(dayId: string, noteMd: string) {
-  await requireSession();
+  await requireTripSession();
 
   const day = await db.tripDay.update({
     where: { id: dayId },
@@ -193,7 +173,7 @@ export async function addTripLocationAction(input: {
   lng: number;
   fromGcj02?: boolean;
 }) {
-  await requireSession();
+  await requireTripSession();
 
   const day = await db.tripDay.findUnique({
     where: { id: input.dayId },
@@ -232,7 +212,7 @@ export async function addTripLocationAction(input: {
 }
 
 export async function removeTripLocationAction(dayId: string, locationId: string) {
-  await requireSession();
+  await requireTripSession();
 
   const day = await db.tripDay.findUnique({
     where: { id: dayId },
@@ -255,7 +235,7 @@ export async function removeTripLocationAction(dayId: string, locationId: string
 }
 
 export async function addTripPhotoAction(dayId: string, url: string) {
-  await requireSession();
+  await requireTripSession();
 
   if (!url.startsWith("/api/files/private/")) {
     return { ok: false, message: "照片必须来自私密上传区。" };
@@ -277,7 +257,7 @@ export async function addTripPhotoAction(dayId: string, url: string) {
 }
 
 export async function removeTripPhotoAction(dayId: string, url: string) {
-  await requireSession();
+  await requireTripSession();
 
   const day = await db.tripDay.findUnique({
     where: { id: dayId },

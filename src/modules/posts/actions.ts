@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { postPublishedTitle, recordActivity } from "@/lib/activity";
 import { db } from "@/lib/db";
-import { normalizePostInput } from "@/modules/posts/utils";
+import { readPostFormData } from "@/modules/posts/utils";
 
 export type PostActionState = {
   ok: boolean;
@@ -17,7 +17,7 @@ export type PostActionState = {
 
 const initialPublishedPaths = ["/blog", "/blog/page/[page]", "/rss.xml"] as const;
 
-async function requireSession() {
+async function requirePostSession() {
   const session = await auth();
 
   if (!session?.user) {
@@ -39,24 +39,6 @@ function revalidatePostPaths(...slugs: Array<string | null | undefined>) {
   revalidatePath("/admin/posts");
 }
 
-function readTags(formData: FormData) {
-  return String(formData.get("tags") ?? "")
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-}
-
-function readPostInput(formData: FormData) {
-  return normalizePostInput({
-    title: formData.get("title"),
-    slug: formData.get("slug"),
-    category: formData.get("category"),
-    tags: readTags(formData),
-    summary: formData.get("summary"),
-    contentMd: formData.get("contentMd"),
-  });
-}
-
 function isUniqueConstraintError(error: unknown) {
   return (
     typeof error === "object" &&
@@ -70,11 +52,11 @@ export async function savePostAction(
   _previousState: PostActionState,
   formData: FormData,
 ): Promise<PostActionState> {
-  await requireSession();
+  await requirePostSession();
 
   const id = String(formData.get("id") ?? "");
   const intent = String(formData.get("intent") ?? "draft");
-  const input = readPostInput(formData);
+  const input = readPostFormData(formData);
 
   if (!input.ok) {
     return { ok: false, message: "请检查文章信息。", errors: input.errors };
@@ -144,7 +126,7 @@ export async function savePostAction(
 }
 
 export async function withdrawPostAction(id: string) {
-  await requireSession();
+  await requirePostSession();
 
   const post = await db.post.update({
     where: { id },
@@ -161,7 +143,7 @@ export async function withdrawPostAction(id: string) {
 }
 
 export async function deletePostAction(id: string) {
-  await requireSession();
+  await requirePostSession();
 
   const post = await db.post.delete({
     where: { id },

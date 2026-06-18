@@ -7,6 +7,7 @@ import {
   normalizePostInput,
   parseBlogPageParam,
   postStatusLabel,
+  readPostFormData,
   slugFromTitle,
 } from "./utils";
 
@@ -63,6 +64,30 @@ describe("normalizePostInput", () => {
         title: "标题不能为空。",
         slug: "Slug 只能包含小写字母、数字和连字符。",
         contentMd: "正文不能为空。",
+      },
+    });
+  });
+});
+
+describe("readPostFormData", () => {
+  it("reads FormData and normalizes comma-separated tags", () => {
+    const formData = new FormData();
+    formData.set("title", " Hello Post ");
+    formData.set("slug", "hello-post");
+    formData.set("category", " Notes ");
+    formData.set("tags", "daily, writing, daily,,");
+    formData.set("summary", " Short summary ");
+    formData.set("contentMd", " Body ");
+
+    expect(readPostFormData(formData)).toEqual({
+      ok: true,
+      data: {
+        title: "Hello Post",
+        slug: "hello-post",
+        category: "Notes",
+        tags: ["daily", "writing"],
+        summary: "Short summary",
+        contentMd: "Body",
       },
     });
   });

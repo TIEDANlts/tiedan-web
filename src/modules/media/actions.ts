@@ -26,7 +26,7 @@ import {
   applyMediaStatusDates,
   mediaStatusLabel,
   nextMediaStatus,
-  normalizeMediaInput,
+  readMediaFormData,
   type MediaStatusValue,
   type MediaTypeValue,
 } from "@/modules/media/utils";
@@ -44,41 +44,12 @@ export type MediaActionState = {
   >;
 };
 
-async function requireSession() {
+async function requireMediaSession() {
   const session = await auth();
 
   if (!session?.user) {
     throw new Error("请先登录后再管理书影。");
   }
-}
-
-function readTags(formData: FormData) {
-  return String(formData.get("tags") ?? "")
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-}
-
-function readMediaInput(formData: FormData) {
-  return normalizeMediaInput({
-    type: formData.get("type"),
-    title: formData.get("title"),
-    originalTitle: formData.get("originalTitle"),
-    creator: formData.get("creator"),
-    year: formData.get("year"),
-    coverUrl: formData.get("coverUrl"),
-    doubanId: formData.get("doubanId"),
-    tmdbId: formData.get("tmdbId"),
-    isbn: formData.get("isbn"),
-    status: formData.get("status"),
-    rating: formData.get("rating"),
-    startedAt: formData.get("startedAt"),
-    finishedAt: formData.get("finishedAt"),
-    releaseDate: formData.get("releaseDate"),
-    reviewMd: formData.get("reviewMd"),
-    hasSpoiler: formData.get("hasSpoiler"),
-    tags: readTags(formData),
-  });
 }
 
 async function localizeCoverUrl(coverUrl: string | null) {
@@ -126,9 +97,9 @@ export async function createMediaItemAction(
   _previousState: MediaActionState,
   formData: FormData,
 ): Promise<MediaActionState> {
-  await requireSession();
+  await requireMediaSession();
 
-  const input = readMediaInput(formData);
+  const input = readMediaFormData(formData);
   if (!input.ok) {
     return { ok: false, message: "请检查书影信息。", errors: input.errors };
   }
@@ -167,14 +138,14 @@ export async function updateMediaItemAction(
   _previousState: MediaActionState,
   formData: FormData,
 ): Promise<MediaActionState> {
-  await requireSession();
+  await requireMediaSession();
 
   const id = String(formData.get("id") ?? "");
   if (!id) {
     return { ok: false, message: "缺少要编辑的条目。", errors: { form: "书影条目不存在。" } };
   }
 
-  const input = readMediaInput(formData);
+  const input = readMediaFormData(formData);
   if (!input.ok) {
     return { ok: false, message: "请检查书影信息。", errors: input.errors };
   }
@@ -227,7 +198,7 @@ export async function updateMediaItemAction(
 }
 
 export async function advanceMediaStatusAction(id: string) {
-  await requireSession();
+  await requireMediaSession();
 
   const item = await db.mediaItem.findUnique({
     where: { id },
@@ -380,7 +351,7 @@ async function isDuplicateImportRow(
 }
 
 export async function parseMediaImportFileAction(formData: FormData): Promise<MediaImportParseState> {
-  await requireSession();
+  await requireMediaSession();
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -409,7 +380,7 @@ export async function parseMediaImportFileAction(formData: FormData): Promise<Me
 }
 
 export async function previewMediaImportAction(payload: MediaImportPayload): Promise<MediaImportPreviewState> {
-  await requireSession();
+  await requireMediaSession();
 
   const normalizedRows = normalizeRows(payload);
   const seenDoubanIds = new Set<string>();
@@ -473,7 +444,7 @@ export async function previewMediaImportAction(payload: MediaImportPayload): Pro
 }
 
 export async function executeMediaImportAction(payload: MediaImportPayload): Promise<MediaImportExecuteState> {
-  await requireSession();
+  await requireMediaSession();
 
   const rows: MediaImportRowData[] = normalizeRows(payload).flatMap((row) => (row.result.ok ? [row.result.data] : []));
 
@@ -506,7 +477,7 @@ export async function searchMediaMetadataAction(
   type: MediaTypeValue,
   query: string,
 ): Promise<MediaMetadataResult | { source: "tmdb" | "neodb"; fallbackUsed: boolean; results: []; message: string }> {
-  await requireSession();
+  await requireMediaSession();
 
   try {
     return await searchMediaMetadata({ type, query });
@@ -523,7 +494,7 @@ export async function searchMediaMetadataAction(
 export async function localizeMediaMetadataCoverAction(
   item: MediaMetadataItem,
 ): Promise<{ ok: true; item: MediaMetadataItem; warning?: string } | { ok: false; message: string }> {
-  await requireSession();
+  await requireMediaSession();
 
   if (!item.coverUrl || item.coverUrl.startsWith("/uploads/")) {
     return { ok: true, item };

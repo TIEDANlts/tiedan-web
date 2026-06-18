@@ -109,6 +109,17 @@ export function normalizePostInput(input: PostInput, now = new Date()): Normaliz
   };
 }
 
+export function readPostFormData(formData: FormData) {
+  return normalizePostInput({
+    title: formData.get("title"),
+    slug: formData.get("slug"),
+    category: formData.get("category"),
+    tags: formData.get("tags"),
+    summary: formData.get("summary"),
+    contentMd: formData.get("contentMd"),
+  });
+}
+
 function headingId(text: string, fallbackIndex: number) {
   return (
     slugFromTitle(text)
