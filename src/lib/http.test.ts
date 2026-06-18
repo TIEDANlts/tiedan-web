@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { fetchWithRetry } from "./http";
+import { fetchWithRetry, OutboundFetchError } from "./http";
 import { SsrfError } from "./ssrf";
 
 afterEach(() => {
@@ -16,8 +16,12 @@ describe("fetchWithRetry SSRF guard", () => {
     "http://10.0.0.1/",
     "ftp://example.com/resource",
     "file:///etc/passwd",
-  ])("rejects internal/disallowed target %s with SsrfError", async (url) => {
-    await expect(fetchWithRetry(url, { retries: 0, timeoutMs: 1000 })).rejects.toBeInstanceOf(SsrfError);
+  ])("rejects internal/disallowed target %s with a stable SSRF code", async (url) => {
+    await expect(fetchWithRetry(url, { retries: 0, timeoutMs: 1000 })).rejects.toBeInstanceOf(OutboundFetchError);
+    await expect(fetchWithRetry(url, { retries: 0, timeoutMs: 1000 })).rejects.toMatchObject({
+      code: "SSRF_BLOCKED",
+      cause: expect.any(SsrfError),
+    });
   });
 
   it("does not raise SsrfError for literal private IPs when escape hatch is enabled", async () => {
@@ -26,5 +30,14 @@ describe("fetchWithRetry SSRF guard", () => {
     await expect(
       fetchWithRetry("http://127.0.0.1:9/", { retries: 0, timeoutMs: 1000 }),
     ).rejects.not.toBeInstanceOf(SsrfError);
+  });
+
+  it("wraps SSRF failures in a stable outbound fetch error code", async () => {
+    await expect(fetchWithRetry("http://127.0.0.1:9/", { retries: 0, timeoutMs: 1000 })).rejects.toBeInstanceOf(
+      OutboundFetchError,
+    );
+    await expect(fetchWithRetry("http://127.0.0.1:9/", { retries: 0, timeoutMs: 1000 })).rejects.toMatchObject({
+      code: "SSRF_BLOCKED",
+    });
   });
 });

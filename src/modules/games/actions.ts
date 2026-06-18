@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { gameFinishedTitle, recordActivity, shouldRecordStatusTransition } from "@/lib/activity";
 import { db } from "@/lib/db";
-import { saveFromUrl } from "@/lib/storage";
+import { remoteImageErrorMessage, saveFromUrl } from "@/lib/storage";
 import {
   type GameStatusValue,
   nextGameStatus,
@@ -100,11 +100,11 @@ export async function createGameAction(
   let coverUrl: string | null;
   try {
     coverUrl = await localizeCoverUrl(input.data.coverUrl);
-  } catch {
+  } catch (error) {
     return {
       ok: false,
       message: "封面保存失败。",
-      errors: { coverUrl: "远程封面无法转存。可以改用本地上传，或使用 Steam CDN 封面链接。" },
+      errors: { coverUrl: remoteImageErrorMessage(error, "远程封面无法转存。可以改用本地上传，或使用 Steam CDN 封面链接。") },
     };
   }
 
@@ -154,11 +154,11 @@ export async function updateGameAction(
   let coverUrl: string | null;
   try {
     coverUrl = await localizeCoverUrl(input.data.coverUrl);
-  } catch {
+  } catch (error) {
     return {
       ok: false,
       message: "封面保存失败。",
-      errors: { coverUrl: "远程封面无法转存。可以改用本地上传，或使用 Steam CDN 封面链接。" },
+      errors: { coverUrl: remoteImageErrorMessage(error, "远程封面无法转存。可以改用本地上传，或使用 Steam CDN 封面链接。") },
     };
   }
 

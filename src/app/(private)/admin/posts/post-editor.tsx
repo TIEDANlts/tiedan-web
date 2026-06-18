@@ -14,6 +14,7 @@ import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { TagInput } from "@/components/tag-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { uploadImageFile } from "@/lib/upload-client";
 import { savePostAction, withdrawPostAction, type PostActionState } from "@/modules/posts/actions";
 import { normalizeSlug, slugFromTitle } from "@/modules/posts/utils";
 
@@ -32,25 +33,6 @@ function FieldError({ children }: { children?: string }) {
   }
 
   return <p className="text-xs text-destructive">{children}</p>;
-}
-
-async function uploadMarkdownImage(file: File) {
-  const formData = new FormData();
-  formData.set("file", file);
-  formData.set("area", "public");
-  formData.set("subdir", "posts");
-
-  const response = await fetch("/api/upload", {
-    method: "POST",
-    body: formData,
-  });
-  const body = (await response.json()) as { url?: string; error?: string };
-
-  if (!response.ok || !body.url) {
-    throw new Error(body.error || "图片上传失败。");
-  }
-
-  return body.url;
 }
 
 export function PostEditor({ post }: { post?: Post }) {
@@ -79,7 +61,7 @@ export function PostEditor({ post }: { post?: Post }) {
     try {
       const snippets = await Promise.all(
         files.map(async (file) => {
-          const url = await uploadMarkdownImage(file);
+          const { url } = await uploadImageFile(file, { area: "public", subdir: "posts" });
           return `![${file.name.replace(/\.[^.]+$/, "")}](${url})`;
         }),
       );

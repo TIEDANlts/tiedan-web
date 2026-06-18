@@ -22,9 +22,14 @@ const mocks = vi.hoisted(() => ({
   fetchWithRetry: vi.fn(),
 }));
 
-vi.mock("./http", () => ({
-  fetchWithRetry: mocks.fetchWithRetry,
-}));
+vi.mock("./http", async () => {
+  const actual = await vi.importActual<typeof import("./http")>("./http");
+
+  return {
+    ...actual,
+    fetchWithRetry: mocks.fetchWithRetry,
+  };
+});
 
 const LOCAL_UPLOAD_LIMIT = 15 * 1024 * 1024;
 const REMOTE_IMAGE_LIMIT = 8 * 1024 * 1024;
@@ -220,5 +225,42 @@ describe("saveFromUrl", () => {
       "远程图片不能超过 8MB",
     );
     expect(cancelled).toBe(true);
+  });
+
+  it("returns stable error codes for remote image failures", async () => {
+    mocks.fetchWithRetry.mockResolvedValueOnce(
+      new Response(null, {
+        status: 200,
+        headers: {
+          "content-length": String(REMOTE_IMAGE_LIMIT + 1),
+          "content-type": "image/png",
+        },
+      }),
+    );
+    await expect(saveFromUrl("https://example.com/too-large.png", "covers")).rejects.toMatchObject({
+      code: "REMOTE_TOO_LARGE",
+    });
+
+    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(null, { status: 404 }));
+    await expect(saveFromUrl("https://example.com/missing.png", "covers")).rejects.toMatchObject({
+      code: "REMOTE_DOWNLOAD_FAILED",
+    });
+
+    mocks.fetchWithRetry.mockResolvedValueOnce(
+      new Response("not an image", {
+        status: 200,
+        headers: {
+          "content-type": "text/html",
+        },
+      }),
+    );
+    await expect(saveFromUrl("https://example.com/cover.html", "covers")).rejects.toMatchObject({
+      code: "REMOTE_UNSUPPORTED_TYPE",
+    });
+
+    mocks.fetchWithRetry.mockRejectedValueOnce(Object.assign(new Error("blocked"), { code: "SSRF_BLOCKED" }));
+    await expect(saveFromUrl("http://127.0.0.1/cover.png", "covers")).rejects.toMatchObject({
+      code: "REMOTE_SSRF_BLOCKED",
+    });
   });
 });

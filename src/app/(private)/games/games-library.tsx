@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { uploadImageFile } from "@/lib/upload-client";
 import { cn } from "@/lib/utils";
 import {
   advanceGameStatusAction,
@@ -77,25 +78,6 @@ function FieldError({ children }: { children?: string }) {
 
 function fieldClass() {
   return "block space-y-2 text-sm font-medium text-ink";
-}
-
-async function uploadGameCover(file: File) {
-  const formData = new FormData();
-  formData.set("file", file);
-  formData.set("area", "public");
-  formData.set("subdir", "games");
-
-  const response = await fetch("/api/upload", {
-    method: "POST",
-    body: formData,
-  });
-  const body = (await response.json()) as { url?: string; error?: string };
-
-  if (!response.ok || !body.url) {
-    throw new Error(body.error || "封面上传失败。");
-  }
-
-  return body.url;
 }
 
 function GameCover({ game, className }: { game: Pick<GameListItem, "name" | "coverUrl">; className?: string }) {
@@ -343,7 +325,8 @@ function CoverInput({
     setUploadError(null);
     startUpload(async () => {
       try {
-        setCoverUrl(await uploadGameCover(file));
+        const { url } = await uploadImageFile(file, { area: "public", subdir: "games" });
+        setCoverUrl(url);
       } catch (uploadError) {
         setUploadError(uploadError instanceof Error ? uploadError.message : "封面上传失败。");
       } finally {

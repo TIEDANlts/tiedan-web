@@ -11,6 +11,7 @@ import { TagInput } from "@/components/tag-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { LeafletTileConfig } from "@/lib/map";
+import { uploadImageFile } from "@/lib/upload-client";
 import { cn } from "@/lib/utils";
 import {
   addTripLocationAction,
@@ -232,21 +233,6 @@ function ChecklistEditor({ trip }: { trip: TripDetail }) {
   );
 }
 
-async function uploadTripPhoto(file: File) {
-  const formData = new FormData();
-  formData.set("file", file);
-  formData.set("area", "private");
-  formData.set("subdir", "trips/photos");
-
-  const response = await fetch("/api/upload", { method: "POST", body: formData });
-  const body = (await response.json()) as { url?: string; error?: string };
-  if (!response.ok || !body.url) {
-    throw new Error(body.error || "照片上传失败。");
-  }
-
-  return body.url;
-}
-
 function LocationForm({ dayId }: { dayId: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -375,7 +361,7 @@ function DayCard({
     }
     startTransition(async () => {
       try {
-        const url = await uploadTripPhoto(file);
+        const { url } = await uploadImageFile(file, { area: "private", subdir: "trips/photos" });
         const result = await addTripPhotoAction(day.id, url);
         setMessage(result.message);
         router.refresh();

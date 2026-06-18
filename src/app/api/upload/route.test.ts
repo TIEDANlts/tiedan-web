@@ -36,8 +36,25 @@ describe("POST /api/upload", () => {
     const response = await POST({ formData: async () => formData } as unknown as Request);
 
     expect(response.status).toBe(413);
-    await expect(response.json()).resolves.toEqual({ error: "图片不能超过 15MB。" });
+    await expect(response.json()).resolves.toEqual({
+      code: "FILE_TOO_LARGE",
+      error: "图片不能超过 15MB。",
+    });
     expect(arrayBuffer).not.toHaveBeenCalled();
     expect(mocks.save).not.toHaveBeenCalled();
+  });
+
+  it("returns a stable error code when the user is not logged in", async () => {
+    const { POST } = await import("./route");
+
+    mocks.auth.mockResolvedValue(null);
+
+    const response = await POST({ formData: async () => new FormData() } as unknown as Request);
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      code: "UNAUTHORIZED",
+      error: "请先登录后再上传文件。",
+    });
   });
 });
