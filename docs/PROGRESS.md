@@ -9,6 +9,13 @@
 
 ## 修复日志
 
+### 2026-06-18 · 大 Client 组件拆分
+- 完成内容：完成优化计划方案 C。`trip-detail-editor.tsx` 拆为旅行标题区、概览表单、清单编辑、日期/地点编辑、照片上传、day note 编辑和 day card 等小组件；`expenses-ledger.tsx` 拆为筛选栏、交易列表、编辑弹窗、导入入口、分类选择、交易行和页头等组件；games/media 的封面上传、评分、标签和状态推进面板抽为共享私密区表单控件。Server Action、表单字段、中文文案、导入流程、金额处理和 `TripDay.locations Json` 数据结构保持不变。
+- 关键文件：`src/app/(private)/trips/[id]/trip-detail-editor.tsx` 与同目录 `trip-*-editor.tsx`/`trip-detail-parts.tsx` 拆分组件；`src/app/(private)/expenses/expenses-ledger.tsx` 与同目录 `expense-*.tsx`/`transaction-*.tsx` 拆分组件；`src/app/(private)/shared/form-controls/*` 共享封面上传、评分、标签、状态推进与字段错误控件；`src/app/(private)/games/games-library.tsx`、`src/app/(private)/media/media-library.tsx`、`src/app/(private)/media/[id]/media-detail-editor.tsx` 接入共享控件。
+- 关键决定与偏离：未新增第三方依赖，未修改 Prisma schema，未改变任何 Server Action 名称/参数；消费台账当前没有独立统计摘要 UI，本批次只保留原有总笔数和日期小计，避免新增页面语义；README 未更新，因为启动、验证、数据库、缓存和部署方式没有变化。
+- 遗留 TODO：C 批次计划要求旅行详情、消费台账、游戏/书影表单做 375px 与桌面浏览器手工验收；本次先完成代码拆分与自动化验证，合并后需要在已登录本地环境中点验这些交互页。
+- 验证：`npx.cmd tsc --noEmit` 通过；`npx.cmd vitest run src/modules/trips/trips.test.ts` 通过（9 条测试）；`npx.cmd vitest run src/modules/expenses/expenses.test.ts` 通过（8 条测试）；`npx.cmd vitest run src/modules/games/games.test.ts src/modules/media/media.test.ts` 通过（2 个测试文件，12 条测试）；`npm.cmd run check` 通过（48 个测试文件，263 条测试）。尝试启动 WSL Docker PostgreSQL 后做浏览器验收，但当前 Windows 到 WSL `localhost:5432` 与 WSL IP 直连均不可达，且 WSL 发行版在命令间会停止并偶发 `WSL_E_DISTRO_NOT_FOUND`；PostgreSQL 容器内部 `pg_isready` 正常，因此浏览器手工验收记录为环境阻塞。
+
 ### 2026-06-18 · Server Action 与表单解析维护性重构
 - 完成内容：完成优化计划方案 B。posts/games/media/trips/expenses/todos 六个模块的 Server Action 本地鉴权 helper 统一为模块语义命名；FormData 读取逻辑迁移到各模块 `utils.ts` 的纯 parser；目标模块的 action state 类型与初始状态移到 `action-state.ts`，客户端初始 state 不再从 `"use server"` 文件旁路导出。Server Action 名称、参数、中文文案、前端交互和数据库写入语义保持不变。
 - 关键文件：`src/modules/*/actions.ts`、`src/modules/*/utils.ts`、`src/modules/*/action-state.ts`、`src/lib/action-auth.test.ts`、`src/lib/server-action-exports.test.ts`，以及 posts/games/media/trips/expenses/todos 对应模块测试和客户端表单入口。
