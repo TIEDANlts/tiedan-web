@@ -11,6 +11,7 @@ import {
   dateFromInput,
   enumerateTripDates,
   normalizeTripInput,
+  planTripDaySync,
   parseTripLocations,
   type TripLocation,
 } from "@/modules/trips/utils";
@@ -89,7 +90,15 @@ export async function updateTripOverviewAction(_state: TripActionState, formData
 
   const existing = await db.trip.findUnique({
     where: { id },
-    select: { status: true },
+    select: {
+      status: true,
+      days: {
+        select: {
+          id: true,
+          date: true,
+        },
+      },
+    },
   });
   if (!existing) {
     return { ok: false, message: "行程不存在。", errors: { form: "行程不存在。" } };
@@ -110,9 +119,27 @@ export async function updateTripOverviewAction(_state: TripActionState, formData
     return { ok: false, message: "请检查行程信息。", errors: input.errors };
   }
 
-  await db.trip.update({
-    where: { id },
-    data: input.data,
+  const nextDates = enumerateTripDates(String(formData.get("startDate")), String(formData.get("endDate")));
+  const daySync = planTripDaySync(existing.days, nextDates);
+
+  await db.$transaction(async (tx) => {
+    await tx.trip.update({
+      where: { id },
+      data: input.data,
+    });
+
+    if (daySync.deleteIds.length > 0) {
+      await tx.tripDay.deleteMany({
+        where: { tripId: id, id: { in: daySync.deleteIds } },
+      });
+    }
+
+    if (daySync.createDates.length > 0) {
+      await tx.tripDay.createMany({
+        data: daySync.createDates.map((date) => ({ tripId: id, date: dateFromInput(date) })),
+        skipDuplicates: true,
+      });
+    }
   });
 
   if (shouldRecordStatusTransition(existing.status, input.data.status, "DONE")) {

@@ -45,6 +45,10 @@ const mocks = vi.hoisted(() => {
         findUnique: vi.fn(),
         update: vi.fn(),
       },
+      tripDay: {
+        createMany: vi.fn(),
+        deleteMany: vi.fn(),
+      },
       transaction: {
         findMany: vi.fn(),
       },
@@ -104,12 +108,12 @@ function postForm(intent = "publish", id = "") {
   return formData;
 }
 
-function tripForm(status: string) {
+function tripForm(status: string, startDate = "2026-06-01", endDate = "2026-06-03") {
   const formData = new FormData();
   formData.set("id", "trip-1");
   formData.set("title", "杭州三日");
-  formData.set("startDate", "2026-06-01");
-  formData.set("endDate", "2026-06-03");
+  formData.set("startDate", startDate);
+  formData.set("endDate", endDate);
   formData.set("destinations", "杭州");
   formData.set("status", status);
   return formData;
@@ -140,6 +144,7 @@ describe("activity recording in server actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     session();
+    mocks.db.$transaction.mockImplementation(async (callback) => callback(mocks.db));
   });
 
   it("records a game activity only when the status enters FINISHED", async () => {
@@ -250,7 +255,7 @@ describe("activity recording in server actions", () => {
   });
 
   it("records a trip activity only when the status enters DONE", async () => {
-    mocks.db.trip.findUnique.mockResolvedValueOnce({ status: "PLANNED" });
+    mocks.db.trip.findUnique.mockResolvedValueOnce({ status: "PLANNED", days: [] });
     mocks.db.trip.update.mockResolvedValueOnce({});
 
     await updateTripOverviewAction({ ok: false, message: null }, tripForm("DONE"));
@@ -266,12 +271,33 @@ describe("activity recording in server actions", () => {
 
     vi.clearAllMocks();
     session();
-    mocks.db.trip.findUnique.mockResolvedValueOnce({ status: "DONE" });
+    mocks.db.trip.findUnique.mockResolvedValueOnce({ status: "DONE", days: [] });
     mocks.db.trip.update.mockResolvedValueOnce({});
 
     await updateTripOverviewAction({ ok: false, message: null }, tripForm("DONE"));
 
     expect(mocks.db.activity.create).not.toHaveBeenCalled();
+  });
+
+  it("syncs trip day rows when the overview date range changes", async () => {
+    mocks.db.trip.findUnique.mockResolvedValueOnce({
+      status: "PLANNED",
+      days: [
+        { id: "day-1", date: new Date("2026-06-01T00:00:00.000Z") },
+        { id: "day-2", date: new Date("2026-06-02T00:00:00.000Z") },
+        { id: "day-3", date: new Date("2026-06-03T00:00:00.000Z") },
+      ],
+    });
+
+    await updateTripOverviewAction({ ok: false, message: null }, tripForm("PLANNED", "2026-06-02", "2026-06-04"));
+
+    expect(mocks.db.tripDay.deleteMany).toHaveBeenCalledWith({
+      where: { tripId: "trip-1", id: { in: ["day-1"] } },
+    });
+    expect(mocks.db.tripDay.createMany).toHaveBeenCalledWith({
+      data: [{ tripId: "trip-1", date: new Date("2026-06-04T00:00:00.000Z") }],
+      skipDuplicates: true,
+    });
   });
 
   it("records an expense import activity only when new rows are inserted", async () => {

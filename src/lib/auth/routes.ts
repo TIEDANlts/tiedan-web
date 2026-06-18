@@ -5,6 +5,9 @@ type PublicRoute = {
 };
 
 export const publicRoutes: PublicRoute[] = [
+  { exact: "/manifest.webmanifest", description: "Stage 16: PWA manifest" },
+  { prefix: "/icons/", description: "Stage 16: PWA icons" },
+  { exact: "/apple-touch-icon.png", description: "Stage 16: Apple touch icon" },
   { exact: "/login", description: "Stage 1：登录页" },
   { exact: "/", description: "Stage 0：公开首页，Stage 16 登录后切仪表盘" },
   { exact: "/blog", description: "Stage 5：公开博客列表" },

@@ -4,6 +4,7 @@ import {
   derivePrivateThumbUrl,
   enumerateTripDates,
   normalizeTripInput,
+  planTripDaySync,
   parseTripLocations,
   tripDaysCount,
 } from "./utils";
@@ -22,6 +23,24 @@ describe("tripDaysCount", () => {
   it("counts inclusive trip days", () => {
     expect(tripDaysCount("2026-06-15", "2026-06-15")).toBe(1);
     expect(tripDaysCount("2026-06-15", "2026-06-17")).toBe(3);
+  });
+});
+
+describe("planTripDaySync", () => {
+  it("keeps in-range days, creates missing dates, and deletes days outside the new range", () => {
+    expect(
+      planTripDaySync(
+        [
+          { id: "day-1", date: new Date("2026-06-01T00:00:00.000Z") },
+          { id: "day-2", date: new Date("2026-06-02T00:00:00.000Z") },
+          { id: "day-3", date: new Date("2026-06-03T00:00:00.000Z") },
+        ],
+        ["2026-06-02", "2026-06-03", "2026-06-04"],
+      ),
+    ).toEqual({
+      createDates: ["2026-06-04"],
+      deleteIds: ["day-1"],
+    });
   });
 });
 

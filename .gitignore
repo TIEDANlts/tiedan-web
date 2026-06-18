@@ -23,6 +23,7 @@
 
 # runtime uploads
 /public/uploads/
+/storage/uploads/
 
 # misc
 .DS_Store
