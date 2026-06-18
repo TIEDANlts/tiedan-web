@@ -22,6 +22,7 @@ import {
   type MediaMetadataItem,
   type MediaMetadataResult,
 } from "@/modules/media/metadata";
+import type { MediaActionState } from "@/modules/media/action-state";
 import {
   applyMediaStatusDates,
   mediaStatusLabel,
@@ -30,19 +31,6 @@ import {
   type MediaStatusValue,
   type MediaTypeValue,
 } from "@/modules/media/utils";
-
-export type MediaActionState = {
-  ok: boolean;
-  message: string | null;
-  itemId?: string;
-  warning?: string;
-  errors?: Partial<
-    Record<
-      "type" | "title" | "year" | "coverUrl" | "status" | "rating" | "startedAt" | "finishedAt" | "releaseDate" | "form",
-      string
-    >
-  >;
-};
 
 async function requireMediaSession() {
   const session = await auth();

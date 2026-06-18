@@ -6,29 +6,13 @@ import { auth } from "@/auth";
 import { gameFinishedTitle, recordActivity, shouldRecordStatusTransition } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { remoteImageErrorMessage, saveFromUrl } from "@/lib/storage";
+import type { GameActionState, SteamSyncActionState } from "@/modules/games/action-state";
 import {
   type GameStatusValue,
   nextGameStatus,
   readGameFormData,
 } from "@/modules/games/utils";
 import { syncSteamLibrary } from "@/modules/games/steam";
-
-export type GameActionState = {
-  ok: boolean;
-  message: string | null;
-  gameId?: string;
-  warning?: string;
-  errors?: Partial<
-    Record<"name" | "platform" | "coverUrl" | "status" | "rating" | "playtimeHours" | "lastPlayedAt" | "form", string>
-  >;
-};
-
-export type SteamSyncActionState = {
-  ok: boolean;
-  message: string;
-  added?: number;
-  updated?: number;
-};
 
 async function requireGameSession() {
   const session = await auth();

@@ -34,4 +34,32 @@ describe("server action modules", () => {
 
     expect(invalidExports).toEqual([]);
   });
+
+  it("keeps form action state types outside target server action modules", () => {
+    const targets = [
+      ["posts", "PostActionState", "initialPostActionState"],
+      ["games", "GameActionState", "initialGameActionState"],
+      ["media", "MediaActionState", "initialMediaActionState"],
+      ["trips", "TripActionState", "initialTripActionState"],
+      ["todos", "TodoActionState", "initialTodoActionState"],
+      ["expenses", "ExpenseActionState", "initialExpenseActionState"],
+    ] as const;
+
+    const misplacedTypes = targets.flatMap(([moduleName, typeName]) => {
+      const actionSource = readFileSync(path.join(process.cwd(), "src", "modules", moduleName, "actions.ts"), "utf8");
+      return new RegExp(`^\\s*export\\s+type\\s+${typeName}\\b`, "m").test(actionSource)
+        ? [`${moduleName}/actions.ts exports ${typeName}`]
+        : [];
+    });
+
+    const missingStateExports = targets.flatMap(([moduleName, typeName, initialName]) => {
+      const stateSource = readFileSync(path.join(process.cwd(), "src", "modules", moduleName, "action-state.ts"), "utf8");
+      const hasType = new RegExp(`^\\s*export\\s+type\\s+${typeName}\\b`, "m").test(stateSource);
+      const hasInitial = new RegExp(`^\\s*export\\s+const\\s+${initialName}\\b`, "m").test(stateSource);
+
+      return hasType && hasInitial ? [] : [`${moduleName}/action-state.ts is missing ${typeName} or ${initialName}`];
+    });
+
+    expect([...misplacedTypes, ...missingStateExports]).toEqual([]);
+  });
 });

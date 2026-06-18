@@ -6,14 +6,8 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { postPublishedTitle, recordActivity } from "@/lib/activity";
 import { db } from "@/lib/db";
+import type { PostActionState } from "@/modules/posts/action-state";
 import { readPostFormData } from "@/modules/posts/utils";
-
-export type PostActionState = {
-  ok: boolean;
-  message: string | null;
-  postId?: string;
-  errors?: Partial<Record<"title" | "slug" | "contentMd" | "form", string>>;
-};
 
 const initialPublishedPaths = ["/blog", "/blog/page/[page]", "/rss.xml"] as const;
 

@@ -21,13 +21,11 @@ import {
   saveChecklistAction,
   updateTripDayNoteAction,
   updateTripOverviewAction,
-  type TripActionState,
 } from "@/modules/trips/actions";
+import { initialTripActionState } from "@/modules/trips/action-state";
 import type { TripDayItem, TripDetail } from "@/modules/trips/queries";
 import { tripStatusLabels } from "@/modules/trips/utils";
 import { DynamicTripMap } from "../leaflet-dynamic";
-
-const initialActionState: TripActionState = { ok: false, message: null };
 
 function FieldError({ children }: { children?: string }) {
   if (!children) {
@@ -75,7 +73,7 @@ function TripHero({ trip }: { trip: TripDetail }) {
 
 function OverviewForm({ trip }: { trip: TripDetail }) {
   const router = useRouter();
-  const [state, formAction, pending] = useActionState(updateTripOverviewAction, initialActionState);
+  const [state, formAction, pending] = useActionState(updateTripOverviewAction, initialTripActionState);
   const [destinations, setDestinations] = useState<string[]>(trip.destinations);
   const [summaryMd, setSummaryMd] = useState(trip.summaryMd);
 

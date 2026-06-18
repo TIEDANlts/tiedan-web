@@ -4,18 +4,13 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import type { TodoActionState } from "@/modules/todos/action-state";
 import {
   dateToTodoDb,
   getShanghaiTodayDate,
   normalizeTodoPriority,
   readCreateTodoFormData,
 } from "@/modules/todos/utils";
-
-export type TodoActionState = {
-  ok: boolean;
-  message: string | null;
-  errors?: Partial<Record<"content" | "date" | "priority" | "target", string>>;
-};
 
 async function requireTodoSession() {
   const session = await auth();

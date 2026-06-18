@@ -7,12 +7,6 @@ import { useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
 import { uploadImageFile } from "@/lib/upload-client";
 import { cn } from "@/lib/utils";
-import type { MediaActionState } from "@/modules/media/actions";
-
-export const initialMediaActionState: MediaActionState = {
-  ok: false,
-  message: null,
-};
 
 export function FieldError({ children }: { children?: string }) {
   if (!children) {

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { advanceMediaStatusAction, updateMediaItemAction } from "@/modules/media/actions";
+import { initialMediaActionState } from "@/modules/media/action-state";
 import type { MediaDetailItem } from "@/modules/media/queries";
 import {
   type MediaStatusValue,
@@ -27,7 +28,7 @@ import {
   mediaTypes,
   nextMediaStatus,
 } from "@/modules/media/utils";
-import { CoverInput, FieldError, fieldClass, initialMediaActionState } from "../media-form-parts";
+import { CoverInput, FieldError, fieldClass } from "../media-form-parts";
 
 export function MediaDetailEditor({
   item,

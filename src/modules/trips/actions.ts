@@ -8,6 +8,7 @@ import { recordActivity, shouldRecordStatusTransition, tripDoneTitle } from "@/l
 import { db } from "@/lib/db";
 import { formatShanghaiDate } from "@/lib/dayjs";
 import { gcj02ToWgs84 } from "@/lib/geo";
+import type { TripActionState } from "@/modules/trips/action-state";
 import {
   dateFromInput,
   enumerateTripDates,
@@ -16,13 +17,6 @@ import {
   readTripFormData,
   type TripLocation,
 } from "@/modules/trips/utils";
-
-export type TripActionState = {
-  ok: boolean;
-  message: string | null;
-  tripId?: string;
-  errors?: Partial<Record<"title" | "startDate" | "endDate" | "destinations" | "coverUrl" | "status" | "budget" | "form", string>>;
-};
 
 async function requireTripSession() {
   const session = await auth();

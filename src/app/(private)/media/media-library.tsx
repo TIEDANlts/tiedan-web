@@ -30,8 +30,8 @@ import {
   createMediaItemAction,
   localizeMediaMetadataCoverAction,
   searchMediaMetadataAction,
-  type MediaActionState,
 } from "@/modules/media/actions";
+import { initialMediaActionState, type MediaActionState } from "@/modules/media/action-state";
 import type { MediaMetadataItem, MediaMetadataResult } from "@/modules/media/metadata";
 import type { MediaListItem, MediaPageData } from "@/modules/media/queries";
 import {
@@ -45,7 +45,7 @@ import {
   mediaTypeLabels,
   mediaTypes,
 } from "@/modules/media/utils";
-import { CoverInput, FieldError, MediaCover, fieldClass, initialMediaActionState } from "./media-form-parts";
+import { CoverInput, FieldError, MediaCover, fieldClass } from "./media-form-parts";
 
 type MediaFormAction = (previousState: MediaActionState, formData: FormData) => Promise<MediaActionState>;
 

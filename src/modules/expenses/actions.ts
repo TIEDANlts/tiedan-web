@@ -9,16 +9,11 @@ import { buildExpenseImportPreview, normalizeImportRowsForCreate } from "@/modul
 import { detectExpenseImportPlatform, parseExpenseImportFile, type ExpenseImportPlatform } from "@/modules/expenses/parsers";
 import { categorizeExpenseTransaction } from "@/modules/expenses/categorize";
 import { getExpenseCategoriesForCategorize, getExpenseCategoryOptions } from "@/modules/expenses/category-options";
+import type { ExpenseActionState } from "@/modules/expenses/action-state";
 import {
   readExpenseCategoryFormData,
   readManualTransactionFormData,
 } from "@/modules/expenses/utils";
-
-export type ExpenseActionState = {
-  ok: boolean;
-  message: string | null;
-  errors?: Partial<Record<"amount" | "direction" | "categoryId" | "date" | "name" | "icon" | "keywords", string>>;
-};
 
 async function requireExpenseSession() {
   const session = await auth();

@@ -15,13 +15,9 @@ import { TagInput } from "@/components/tag-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { uploadImageFile } from "@/lib/upload-client";
-import { savePostAction, withdrawPostAction, type PostActionState } from "@/modules/posts/actions";
+import { savePostAction, withdrawPostAction } from "@/modules/posts/actions";
+import { initialPostActionState } from "@/modules/posts/action-state";
 import { normalizeSlug, slugFromTitle } from "@/modules/posts/utils";
-
-const initialState: PostActionState = {
-  ok: false,
-  message: null,
-};
 
 function fieldClass() {
   return "block space-y-2 text-sm font-medium text-ink";
@@ -45,7 +41,7 @@ export function PostEditor({ post }: { post?: Post }) {
   const [tags, setTags] = useState<string[]>(post?.tags ?? []);
   const [contentMd, setContentMd] = useState(post?.contentMd ?? "");
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [state, formAction, pending] = useActionState(savePostAction, initialState);
+  const [state, formAction, pending] = useActionState(savePostAction, initialPostActionState);
   const [isWithdrawing, startWithdraw] = useTransition();
   const preview = useMemo(() => <MarkdownRenderer value={contentMd || "预览会显示在这里。"} />, [contentMd]);
   const visibleSlug = slugTouched ? slug : slugFromTitle(title);

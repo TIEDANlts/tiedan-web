@@ -34,8 +34,8 @@ import {
   createGameAction,
   syncSteamLibraryAction,
   updateGameAction,
-  type GameActionState,
 } from "@/modules/games/actions";
+import { initialGameActionState, type GameActionState } from "@/modules/games/action-state";
 import type { GameListItem, GamesPageData } from "@/modules/games/queries";
 import {
   type GameFilters,
@@ -49,11 +49,6 @@ import {
   gameStatuses,
   nextGameStatus,
 } from "@/modules/games/utils";
-
-const initialActionState: GameActionState = {
-  ok: false,
-  message: null,
-};
 
 const platformPresets = ["Steam", "Switch", "PS5", "Xbox", "Mobile", "PC"] as const;
 
@@ -373,7 +368,7 @@ function GameForm({
 }) {
   const router = useRouter();
   const platformListId = useId();
-  const [state, formAction, pending] = useActionState(action, initialActionState);
+  const [state, formAction, pending] = useActionState(action, initialGameActionState);
   const [name, setName] = useState(game?.name ?? "");
   const [platform, setPlatform] = useState(game?.platform ?? "PC");
   const [coverUrl, setCoverUrl] = useState(game?.coverUrl ?? "");
