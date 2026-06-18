@@ -9,6 +9,13 @@
 
 ## 修复日志
 
+### 2026-06-18 · 上传大小限制与活动流幂等加固
+- 完成内容：本地图片上传在读取 `arrayBuffer()` 前限制为 15MB，远程图片转存在 `content-length` 和流式读取两层限制为 8MB，超限返回中文错误；`Activity` 增加 `(module, action, refId)` 数据库唯一键，历史重复迁移时保留最早一条；`recordActivity()` 改为 `upsert`，重复记录只更新标题并保留原 `happenedAt`；文章发布逻辑移除 `hasActivity()` 先查后写。
+- 关键文件：`src/lib/storage.ts`、`src/app/api/upload/route.ts`、`src/lib/activity.ts`、`src/modules/posts/actions.ts`、`prisma/schema.prisma`、`prisma/migrations/20260618074000_add_activity_unique/migration.sql`、`src/lib/storage.test.ts`、`src/app/api/upload/route.test.ts`、`src/lib/activity.test.ts`、`src/lib/activity-actions.test.ts`。
+- 关键决定与偏离：未新增第三方依赖，未改 public/private 上传路径和 sharp 管线；未抽全局 `requireSession()`；由于 Windows 到 WSL 的 `localhost:5432` 转发在本机 Codex 环境中不可用，迁移验证改为使用既有应用 Docker 镜像加入 PostgreSQL 容器网络执行 Prisma，等价验证数据库 schema。
+- 遗留 TODO：无。
+- 验证：先补回归测试并确认失败；`npx.cmd vitest run src/lib/storage.test.ts src/app/api/upload/route.test.ts src/lib/activity.test.ts src/lib/activity-actions.test.ts` 通过；`wsl.exe ... docker compose -f docker-compose.dev.yml up -d` 启动 PostgreSQL，容器内 `pg_isready` 通过；Docker 网络内 `/app/node_modules/.bin/prisma migrate dev --name add_activity_unique` 通过；Docker 网络内 `/app/node_modules/.bin/prisma migrate status` 显示 `Database schema is up to date!`；`npx.cmd prisma generate` 通过；`npm.cmd run check` 通过（45 个测试文件，239 条测试）；本轮未改浏览器交互，未运行 `npm.cmd run e2e`。
+
 ### 2026-06-18 · 上传隔离、旅行日期同步与 PWA 白名单修复
 - 完成内容：修复未配置 `UPLOAD_DIR` 时 private 上传区落在匿名 `/uploads/**` 可访问目录下的隐私风险；旅行概览编辑开始 / 结束日期时会在事务内同步 `TripDay`，保留新区间内已有笔记、照片和地点，补齐新增日期并删除区间外日期；补齐 PWA manifest、icons 和 apple-touch-icon 的公开路由白名单。
 - 关键文件：`src/lib/storage.ts`、`src/lib/auth/routes.ts`、`src/modules/trips/actions.ts`、`src/modules/trips/utils.ts`、`src/lib/storage.test.ts`、`src/lib/auth/routes.test.ts`、`src/modules/trips/trips.test.ts`、`src/lib/activity-actions.test.ts`、`.gitignore`、`README.md`、`AGENTS.md`。

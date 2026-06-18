@@ -228,5 +228,6 @@ model Activity {
   title      String
   happenedAt DateTime @default(now())
 
+  @@unique([module, action, refId])
   @@index([happenedAt])
 }

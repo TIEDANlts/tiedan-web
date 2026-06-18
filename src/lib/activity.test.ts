@@ -17,7 +17,7 @@ import {
 vi.mock("./db", () => ({
   db: {
     activity: {
-      create: vi.fn(),
+      upsert: vi.fn(),
       findMany: vi.fn(),
     },
     post: {
@@ -26,7 +26,7 @@ vi.mock("./db", () => ({
   },
 }));
 
-const create = vi.mocked(db.activity.create);
+const upsert = vi.mocked(db.activity.upsert);
 const findActivities = vi.mocked(db.activity.findMany);
 const findPosts = vi.mocked(db.post.findMany);
 
@@ -35,8 +35,8 @@ describe("recordActivity", () => {
     vi.clearAllMocks();
   });
 
-  it("writes a cross-module activity entry", async () => {
-    create.mockResolvedValue({
+  it("creates a cross-module activity entry through the unique activity key", async () => {
+    upsert.mockResolvedValue({
       id: "activity-1",
       module: "games",
       action: "finished",
@@ -47,14 +47,50 @@ describe("recordActivity", () => {
 
     await recordActivity("games", "finished", "game-1", "通关了《星露谷物语》");
 
-    expect(create).toHaveBeenCalledWith({
-      data: {
+    expect(upsert).toHaveBeenCalledWith({
+      where: {
+        module_action_refId: {
+          module: "games",
+          action: "finished",
+          refId: "game-1",
+        },
+      },
+      create: {
         module: "games",
         action: "finished",
         refId: "game-1",
         title: "通关了《星露谷物语》",
       },
+      update: {
+        title: "通关了《星露谷物语》",
+      },
     });
+  });
+
+  it("keeps the original happenedAt when the same activity is recorded again", async () => {
+    const firstHappenedAt = new Date("2026-06-15T12:00:00.000Z");
+
+    upsert.mockResolvedValue({
+      id: "activity-1",
+      module: "posts",
+      action: "published",
+      refId: "post-1",
+      title: "发布了文章《新标题》",
+      happenedAt: firstHappenedAt,
+    });
+
+    await recordActivity("posts", "published", "post-1", "发布了文章《新标题》");
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: { title: "发布了文章《新标题》" },
+      }),
+    );
+    expect(upsert).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ happenedAt: expect.anything() }),
+      }),
+    );
   });
 });
 

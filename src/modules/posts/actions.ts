@@ -4,7 +4,7 @@ import { PostStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
-import { hasActivity, postPublishedTitle, recordActivity } from "@/lib/activity";
+import { postPublishedTitle, recordActivity } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { normalizePostInput } from "@/modules/posts/utils";
 
@@ -115,7 +115,7 @@ export async function savePostAction(
           data,
         });
 
-    if (post.status === PostStatus.PUBLISHED && !wasPublished && !(await hasActivity("posts", "published", post.id))) {
+    if (post.status === PostStatus.PUBLISHED && !wasPublished) {
       await recordActivity("posts", "published", post.id, postPublishedTitle(post.title));
     }
 

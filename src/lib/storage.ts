@@ -35,6 +35,9 @@ export class StorageError extends Error {
   }
 }
 
+export const LOCAL_UPLOAD_MAX_BYTES = 15 * 1024 * 1024;
+export const REMOTE_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+
 const IMAGE_TYPES = new Map<string, DetectedImage>([
   ["image/jpeg", { contentType: "image/jpeg", extension: "jpg", output: "jpeg" }],
   ["image/jpg", { contentType: "image/jpeg", extension: "jpg", output: "jpeg" }],
@@ -169,6 +172,74 @@ function outputContentType(output: ImageOutput) {
   return output === "jpeg" ? "image/jpeg" : "image/webp";
 }
 
+function formatMegabytes(bytes: number) {
+  return Math.floor(bytes / 1024 / 1024);
+}
+
+export function assertLocalUploadSize(size: number) {
+  if (size > LOCAL_UPLOAD_MAX_BYTES) {
+    throw new StorageError(`图片不能超过 ${formatMegabytes(LOCAL_UPLOAD_MAX_BYTES)}MB。`);
+  }
+}
+
+function assertRemoteImageSize(size: number) {
+  if (size > REMOTE_IMAGE_MAX_BYTES) {
+    throw new StorageError(`远程图片不能超过 ${formatMegabytes(REMOTE_IMAGE_MAX_BYTES)}MB。`);
+  }
+}
+
+function assertRemoteContentLength(headers: Headers) {
+  const contentLength = headers.get("content-length");
+
+  if (!contentLength) {
+    return;
+  }
+
+  const size = Number(contentLength);
+
+  if (Number.isFinite(size)) {
+    assertRemoteImageSize(size);
+  }
+}
+
+async function readLimitedResponseBuffer(response: Response, maxBytes: number) {
+  const reader = response.body?.getReader();
+
+  if (!reader) {
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    assertRemoteImageSize(buffer.byteLength);
+
+    return buffer;
+  }
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      total += value.byteLength;
+
+      if (total > maxBytes) {
+        await reader.cancel();
+        assertRemoteImageSize(total);
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), total);
+}
+
 async function processImage(buffer: Buffer, image: DetectedImage, size: number) {
   let pipeline = sharp(buffer, { animated: image.animated }).rotate().resize({
     width: size,
@@ -187,6 +258,8 @@ async function processImage(buffer: Buffer, image: DetectedImage, size: number) 
 }
 
 export async function save(buffer: Buffer, options: SaveOptions): Promise<SaveResult> {
+  assertLocalUploadSize(buffer.byteLength);
+
   const image = detectImageType(options.contentType, options.filename);
   const safeSubdir = sanitizeStorageSubdir(options.subdir);
   const areaRoot = getAreaRoot(options.area);
@@ -233,7 +306,9 @@ export async function saveFromUrl(url: string, subdir: string) {
     throw new Error(`下载文件失败：${response.status}`);
   }
 
-  return save(Buffer.from(await response.arrayBuffer()), {
+  assertRemoteContentLength(response.headers);
+
+  return save(await readLimitedResponseBuffer(response, REMOTE_IMAGE_MAX_BYTES), {
     area: "public",
     subdir,
     contentType: response.headers.get("content-type"),
