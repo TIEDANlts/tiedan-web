@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
     db: {
       activity: {
         create: vi.fn(),
+        upsert: vi.fn(),
         findFirst: vi.fn(),
       },
       game: {
@@ -140,6 +141,27 @@ function parsedExpenseRows() {
   };
 }
 
+function expectActivityRecorded(module: string, action: string, refId: string, title: string) {
+  expect(mocks.db.activity.upsert).toHaveBeenCalledWith({
+    where: {
+      module_action_refId: {
+        module,
+        action,
+        refId,
+      },
+    },
+    create: {
+      module,
+      action,
+      refId,
+      title,
+    },
+    update: {
+      title,
+    },
+  });
+}
+
 describe("activity recording in server actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -153,14 +175,7 @@ describe("activity recording in server actions", () => {
 
     await updateGameAction({ ok: false, message: null }, gameForm("FINISHED"));
 
-    expect(mocks.db.activity.create).toHaveBeenCalledWith({
-      data: {
-        module: "games",
-        action: "finished",
-        refId: "game-1",
-        title: "通关了《星露谷物语》",
-      },
-    });
+    expectActivityRecorded("games", "finished", "game-1", "通关了《星露谷物语》");
 
     vi.clearAllMocks();
     session();
@@ -169,7 +184,7 @@ describe("activity recording in server actions", () => {
 
     await updateGameAction({ ok: false, message: null }, gameForm("FINISHED"));
 
-    expect(mocks.db.activity.create).not.toHaveBeenCalled();
+    expect(mocks.db.activity.upsert).not.toHaveBeenCalled();
   });
 
   it("records a media activity only when the status enters DONE", async () => {
@@ -185,14 +200,7 @@ describe("activity recording in server actions", () => {
 
     await advanceMediaStatusAction("media-1");
 
-    expect(mocks.db.activity.create).toHaveBeenCalledWith({
-      data: {
-        module: "media",
-        action: "done",
-        refId: "media-1",
-        title: "读完《活着》",
-      },
-    });
+    expectActivityRecorded("media", "done", "media-1", "读完《活着》");
 
     vi.clearAllMocks();
     session();
@@ -207,28 +215,21 @@ describe("activity recording in server actions", () => {
 
     await advanceMediaStatusAction("media-1");
 
-    expect(mocks.db.activity.create).not.toHaveBeenCalled();
+    expect(mocks.db.activity.upsert).not.toHaveBeenCalled();
   });
 
-  it("records a post publish activity once per post id", async () => {
+  it("records post publish activity through the idempotent activity key", async () => {
     mocks.db.post.create.mockResolvedValueOnce({
       id: "post-1",
       title: "第一篇文章",
       slug: "first-post",
       status: "PUBLISHED",
     });
-    mocks.db.activity.findFirst.mockResolvedValueOnce(null);
 
     await savePostAction({ ok: false, message: null }, postForm());
 
-    expect(mocks.db.activity.create).toHaveBeenCalledWith({
-      data: {
-        module: "posts",
-        action: "published",
-        refId: "post-1",
-        title: "发布了文章《第一篇文章》",
-      },
-    });
+    expectActivityRecorded("posts", "published", "post-1", "发布了文章《第一篇文章》");
+    expect(mocks.db.activity.findFirst).not.toHaveBeenCalled();
 
     vi.clearAllMocks();
     session();
@@ -243,15 +244,11 @@ describe("activity recording in server actions", () => {
       slug: "renamed-post",
       status: "PUBLISHED",
     });
-    mocks.db.activity.findFirst.mockResolvedValueOnce({ id: "activity-1" });
 
     await savePostAction({ ok: false, message: null }, postForm("publish", "post-1"));
 
-    expect(mocks.db.activity.create).not.toHaveBeenCalled();
-    expect(mocks.db.activity.findFirst).toHaveBeenCalledWith({
-      where: { module: "posts", action: "published", refId: "post-1" },
-      select: { id: true },
-    });
+    expectActivityRecorded("posts", "published", "post-1", "发布了文章《第一篇文章》");
+    expect(mocks.db.activity.findFirst).not.toHaveBeenCalled();
   });
 
   it("records a trip activity only when the status enters DONE", async () => {
@@ -260,14 +257,7 @@ describe("activity recording in server actions", () => {
 
     await updateTripOverviewAction({ ok: false, message: null }, tripForm("DONE"));
 
-    expect(mocks.db.activity.create).toHaveBeenCalledWith({
-      data: {
-        module: "trips",
-        action: "done",
-        refId: "trip-1",
-        title: "完成了旅行：杭州三日",
-      },
-    });
+    expectActivityRecorded("trips", "done", "trip-1", "完成了旅行：杭州三日");
 
     vi.clearAllMocks();
     session();
@@ -276,7 +266,7 @@ describe("activity recording in server actions", () => {
 
     await updateTripOverviewAction({ ok: false, message: null }, tripForm("DONE"));
 
-    expect(mocks.db.activity.create).not.toHaveBeenCalled();
+    expect(mocks.db.activity.upsert).not.toHaveBeenCalled();
   });
 
   it("syncs trip day rows when the overview date range changes", async () => {
@@ -315,14 +305,7 @@ describe("activity recording in server actions", () => {
       platform: "alipay",
     });
 
-    expect(mocks.db.activity.create).toHaveBeenCalledWith({
-      data: {
-        module: "expenses",
-        action: "imported",
-        refId: "batch-1",
-        title: "导入了 1 笔账单",
-      },
-    });
+    expectActivityRecorded("expenses", "imported", "batch-1", "导入了 1 笔账单");
 
     vi.clearAllMocks();
     session();
@@ -339,6 +322,6 @@ describe("activity recording in server actions", () => {
       platform: "alipay",
     });
 
-    expect(mocks.db.activity.create).not.toHaveBeenCalled();
+    expect(mocks.db.activity.upsert).not.toHaveBeenCalled();
   });
 });

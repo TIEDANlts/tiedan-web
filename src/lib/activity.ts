@@ -28,11 +28,21 @@ export type ActivityDayGroup = {
 };
 
 export async function recordActivity(module: string, action: string, refId: string, title: string) {
-  return db.activity.create({
-    data: {
+  return db.activity.upsert({
+    where: {
+      module_action_refId: {
+        module,
+        action,
+        refId,
+      },
+    },
+    create: {
       module,
       action,
       refId,
+      title,
+    },
+    update: {
       title,
     },
   });
@@ -144,13 +154,4 @@ export async function getRecentActivityGroups(limit = 20) {
   const hrefs = await resolveActivityHrefs(rows);
 
   return groupActivitiesByDay(rows, hrefs);
-}
-
-export async function hasActivity(module: string, action: string, refId: string) {
-  const existing = await db.activity.findFirst({
-    where: { module, action, refId },
-    select: { id: true },
-  });
-
-  return Boolean(existing);
 }

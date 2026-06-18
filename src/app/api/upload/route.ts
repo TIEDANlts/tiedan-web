@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
-import { save, StorageError, type StorageArea } from "@/lib/storage";
+import { assertLocalUploadSize, save, StorageError, type StorageArea } from "@/lib/storage";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -16,6 +16,16 @@ export async function POST(request: Request) {
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "请选择要上传的图片。" }, { status: 400 });
+    }
+
+    try {
+      assertLocalUploadSize(file.size);
+    } catch (error) {
+      if (error instanceof StorageError) {
+        return NextResponse.json({ error: error.message }, { status: 413 });
+      }
+
+      throw error;
     }
 
     const requestedArea = String(formData.get("area") ?? "public");

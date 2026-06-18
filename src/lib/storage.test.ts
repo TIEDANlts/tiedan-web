@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   assertPublicUploadPath,
@@ -13,15 +13,28 @@ import {
   getPublicUploadRoot,
   getUploadRoot,
   save,
+  saveFromUrl,
   sanitizeStorageSubdir,
   StorageError,
 } from "./storage";
+
+const mocks = vi.hoisted(() => ({
+  fetchWithRetry: vi.fn(),
+}));
+
+vi.mock("./http", () => ({
+  fetchWithRetry: mocks.fetchWithRetry,
+}));
+
+const LOCAL_UPLOAD_LIMIT = 15 * 1024 * 1024;
+const REMOTE_IMAGE_LIMIT = 8 * 1024 * 1024;
 
 let uploadRoot: string;
 
 beforeEach(async () => {
   uploadRoot = await mkdtemp(path.join(os.tmpdir(), "tiedan-storage-"));
   process.env.UPLOAD_DIR = uploadRoot;
+  vi.clearAllMocks();
 });
 
 afterEach(async () => {
@@ -93,6 +106,17 @@ describe("assertPrivateUploadPath", () => {
 });
 
 describe("save", () => {
+  it("rejects local upload buffers larger than 15MB before image processing", async () => {
+    await expect(
+      save(Buffer.alloc(LOCAL_UPLOAD_LIMIT + 1), {
+        area: "public",
+        subdir: "posts",
+        contentType: "image/png",
+        filename: "too-large.png",
+      }),
+    ).rejects.toThrow("图片不能超过 15MB");
+  });
+
   it("writes a processed image and a 480px thumbnail", async () => {
     const input = await sharp({
       create: {
@@ -150,5 +174,51 @@ describe("save", () => {
 
     expect(result.url).toMatch(/^\/api\/files\/private\/trips\/\d+-[a-f0-9-]+\.webp$/);
     expect(result.thumbUrl).toMatch(/^\/api\/files\/private\/trips\/\d+-[a-f0-9-]+-thumb\.webp$/);
+  });
+});
+
+describe("saveFromUrl", () => {
+  it("rejects remote images when content-length is larger than 8MB", async () => {
+    mocks.fetchWithRetry.mockResolvedValue(
+      new Response(null, {
+        status: 200,
+        headers: {
+          "content-length": String(REMOTE_IMAGE_LIMIT + 1),
+          "content-type": "image/png",
+        },
+      }),
+    );
+
+    await expect(saveFromUrl("https://example.com/cover.png", "covers")).rejects.toThrow(
+      "远程图片不能超过 8MB",
+    );
+  });
+
+  it("stops reading a remote image stream once it grows beyond 8MB", async () => {
+    let cancelled = false;
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        controller.enqueue(new Uint8Array(pulls === 1 ? REMOTE_IMAGE_LIMIT : 1));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+
+    mocks.fetchWithRetry.mockResolvedValue(
+      new Response(body, {
+        status: 200,
+        headers: {
+          "content-type": "image/png",
+        },
+      }),
+    );
+
+    await expect(saveFromUrl("https://example.com/cover.png", "covers")).rejects.toThrow(
+      "远程图片不能超过 8MB",
+    );
+    expect(cancelled).toBe(true);
   });
 });
