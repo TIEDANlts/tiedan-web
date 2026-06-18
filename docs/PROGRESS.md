@@ -9,6 +9,13 @@
 
 ## 修复日志
 
+### 2026-06-18 · 上传隔离、旅行日期同步与 PWA 白名单修复
+- 完成内容：修复未配置 `UPLOAD_DIR` 时 private 上传区落在匿名 `/uploads/**` 可访问目录下的隐私风险；旅行概览编辑开始 / 结束日期时会在事务内同步 `TripDay`，保留新区间内已有笔记、照片和地点，补齐新增日期并删除区间外日期；补齐 PWA manifest、icons 和 apple-touch-icon 的公开路由白名单。
+- 关键文件：`src/lib/storage.ts`、`src/lib/auth/routes.ts`、`src/modules/trips/actions.ts`、`src/modules/trips/utils.ts`、`src/lib/storage.test.ts`、`src/lib/auth/routes.test.ts`、`src/modules/trips/trips.test.ts`、`src/lib/activity-actions.test.ts`、`.gitignore`、`README.md`、`AGENTS.md`。
+- 关键决定与偏离：未新增第三方依赖，未改数据库 schema；本地未配置 `UPLOAD_DIR` 时 public 仍兼容 `public/uploads`，private 改为已忽略的 `storage/uploads/private`，生产环境继续按 `UPLOAD_DIR/public` 与 `UPLOAD_DIR/private` 分区。
+- 遗留 TODO：无。
+- 验证：先补回归测试并确认失败；`npx.cmd vitest run src/lib/auth/routes.test.ts src/lib/storage.test.ts src/modules/trips/trips.test.ts src/lib/activity-actions.test.ts` 通过；`npm.cmd run check` 通过（44 个测试文件，234 条测试）。
+
 ### 2026-06-16 · 本地启动、主题告警与登录错误修复
 - 完成内容：`npm.cmd run dev:local` 现在会先确认 WSL Docker 里的 PostgreSQL 容器已就绪，然后把 `prisma migrate deploy`、`prisma generate`、`db:seed` 和 Next dev server 都放在 WSL 内运行，并临时注入 WSL 内可达的 `DATABASE_URL`，避免 Windows 到 WSL 的 `localhost:5432` 端口转发抖动导致公开博客、导航和登录页 Prisma 报错。另将 `next-themes` 替换为本地主题 Provider，避免 React 19 / Next 16 下渲染 `<script>` 的控制台告警；登录失败现在只在真实凭据错误时提示“用户名或密码不正确”并计入限流，数据库/服务错误会提示检查本地数据库。
 - 关键文件：`scripts/dev-local.ps1`、`scripts/dev-local.test.ts`、`src/components/theme-provider.tsx`、`src/components/app-shell.tsx`、`src/components/ui/sonner.tsx`、`src/components/theme-provider.test.ts`、`src/app/(public)/login/actions.ts`、`src/app/(public)/login/errors.ts`、`src/app/(public)/login/errors.test.ts`、`README.md`。

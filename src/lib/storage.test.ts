@@ -9,6 +9,8 @@ import {
   assertPrivateUploadPath,
   detectImageType,
   extensionFromContentType,
+  getPrivateUploadRoot,
+  getPublicUploadRoot,
   getUploadRoot,
   save,
   sanitizeStorageSubdir,
@@ -65,6 +67,19 @@ describe("assertPublicUploadPath", () => {
 
     expect(assertPublicUploadPath(["posts", "a.webp"])).toBe(path.join(publicRoot, "posts", "a.webp"));
     expect(() => assertPublicUploadPath(["..", "private", "a.webp"])).toThrow("文件路径无效");
+  });
+});
+
+describe("private upload fallback", () => {
+  it("does not place the private fallback under anonymously served public uploads", () => {
+    delete process.env.UPLOAD_DIR;
+
+    const publicRoot = getPublicUploadRoot();
+    const privateRoot = getPrivateUploadRoot();
+    const relative = path.relative(publicRoot, privateRoot);
+
+    expect(relative.startsWith("..") || path.isAbsolute(relative)).toBe(true);
+    expect(assertPublicUploadPath(["private", "trips", "a.webp"])).not.toBe(path.join(privateRoot, "trips", "a.webp"));
   });
 });
 

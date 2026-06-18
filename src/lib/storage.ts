@@ -104,7 +104,11 @@ function getAreaRoot(area: StorageArea) {
     return path.join(root, area);
   }
 
-  return area === "public" ? root : path.join(root, "private");
+  if (area === "public") {
+    return root;
+  }
+
+  return path.resolve(path.join(/*turbopackIgnore: true*/ process.cwd(), "storage", "uploads", "private"));
 }
 
 export function getPublicUploadRoot() {

@@ -94,6 +94,18 @@ export function tripDaysCount(startDate: string, endDate: string) {
   return enumerateTripDates(startDate, endDate).length;
 }
 
+export function planTripDaySync(existingDays: Array<{ id: string; date: Date }>, nextDates: string[]) {
+  const nextDateSet = new Set(nextDates);
+  const existingDateSet = new Set(existingDays.map((day) => formatShanghaiDate(day.date)));
+
+  return {
+    createDates: nextDates.filter((date) => !existingDateSet.has(date)),
+    deleteIds: existingDays
+      .filter((day) => !nextDateSet.has(formatShanghaiDate(day.date)))
+      .map((day) => day.id),
+  };
+}
+
 function normalizeBudget(rawBudget: FormDataEntryValue | string | null | undefined): { value: Prisma.Decimal | null } | { error: string } {
   const budget = stringValue(rawBudget);
 

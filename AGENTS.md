@@ -365,7 +365,7 @@ Vitest（单测）+ Playwright（冒烟）。
 1. 界面文案全部中文；本项目永远只有一个用户，禁止做注册/多租户。
 2. 默认 Server Component；交互组件才 'use client'。
 3. 所有写操作用 Server Action，且函数第一行校验 session（不信任 middleware 单层防护）。
-4. 公开路由白名单：/login、/、/blog/**、/nav、/rss.xml、/uploads/**、/api/auth/**、/api/health、/api/posts/view、/api/cron/steam-sync（Bearer Token 鉴权）、/api/quick/**（自带 Token 鉴权）；其余一律登录可见。改动白名单必须同步更新本条。
+4. 公开路由白名单：/login、/、/blog/**、/nav、/rss.xml、/manifest.webmanifest、/icons/**、/apple-touch-icon.png、/uploads/**、/api/auth/**、/api/health、/api/posts/view、/api/cron/steam-sync（Bearer Token 鉴权）、/api/quick/**（自带 Token 鉴权）；其余一律登录可见。改动白名单必须同步更新本条。
 5. 金额一律 Prisma Decimal，禁止浮点参与计算；货币格式化用 src/lib/money.ts；Decimal 传给 Client Component 前必须 .toString()。
 6. 日期时间统一 dayjs 处理，时区 UTC+8；@db.Date 字段比较用 format('YYYY-MM-DD')，禁止 toISOString() 截取。
 7. schema 变更必须 prisma migrate dev 生成迁移文件并提交；禁止 db push。

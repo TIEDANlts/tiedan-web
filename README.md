@@ -14,7 +14,7 @@
   - `ADMIN_USERNAME`
   - `ADMIN_PASSWORD`
   - `SITE_URL`（RSS 与公开链接用；本地可用 `http://localhost:3000`）
-  - `UPLOAD_DIR`（上传根目录；本地可留空以回退到 `public/uploads`，生产建议挂载 `/data/uploads`）
+  - `UPLOAD_DIR`（上传根目录；本地可留空：public 文件回退到 `public/uploads`，private 文件回退到已忽略的 `storage/uploads/private`；生产建议挂载 `/data/uploads`）
   - `OUTBOUND_PROXY`（可选；外部图片和后续出海 API 请求代理）
   - `STEAM_API_KEY` / `STEAM_ID`（Stage 8 Steam 游戏库同步）
   - `TMDB_API_KEY`（Stage 10 电影 / 剧集搜索补全，可选；失败会回退 NeoDB）
@@ -180,7 +180,7 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 
 ## 当前功能
 
-- 公开路由：`/login`、`/`、`/blog/**`、`/nav`、`/rss.xml`、`/uploads/**`、`/api/auth/**`、`/api/health`、`/api/posts/view`、`/api/cron/steam-sync`、`/api/quick/**`。
+- 公开路由：`/login`、`/`、`/blog/**`、`/nav`、`/rss.xml`、`/manifest.webmanifest`、`/icons/**`、`/apple-touch-icon.png`、`/uploads/**`、`/api/auth/**`、`/api/health`、`/api/posts/view`、`/api/cron/steam-sync`、`/api/quick/**`。
 - 私密路由：除白名单外默认要求登录；登录后 `/` 显示收藏册仪表盘和私密侧边栏。
 - 登录：Auth.js v5 Credentials，bcrypt 校验 `User.passwordHash`，JWT session 30 天。
 - Seed：`scripts/seed.ts` 幂等创建 / 更新唯一管理员，并补齐默认消费分类。
@@ -217,7 +217,7 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 博客管理：`/admin/posts` 支持状态筛选、标题搜索、新建、编辑、存草稿、发布、撤回和删除；编辑页含标题、slug、分类、标签、摘要、Markdown 正文和粘贴图片自动上传。
 - 公开博客：`/blog` 与 `/blog/page/[page]` 展示已发布文章列表；`/blog/[slug]` 展示详情、桌面 TOC、上一篇/下一篇；草稿公开端 404。
 - 公开渲染策略：Stage 6A 为保证 `npm run build` 与 Docker/CI 构建不依赖构建期数据库，`/blog`、`/nav`、`/rss.xml` 暂时动态渲染；恢复静态化前需要重新设计构建期数据源或 ISR 策略。
-- 上传与文件：`POST /api/upload` 仅登录可用；`GET /uploads/**` 只服务 public 区文件并带长缓存头，匿名可访问博客图片。
+- 上传与文件：`POST /api/upload` 仅登录可用；`GET /uploads/**` 只服务 public 区文件并带长缓存头，匿名可访问博客图片；private 区文件只通过登录鉴权的 `/api/files/private/**` 读取。
 - RSS 与浏览量：`/rss.xml` 输出最近 20 篇已发布文章；详情页客户端挂载后通过 `/api/posts/view` 上报浏览量，同 IP 同文章短时去抖。
 - PWA：`manifest.webmanifest`、192/512 图标和 apple-touch-icon 已接入，添加到主屏幕后使用独立窗口名称和站点图标；当前不实现 Service Worker。
 - 通用组件：`PageHeader`、`EmptyState`、`ConfirmDialog`、`TagInput`、`StatusBadge`、`RatingStars`、`MarkdownEditor`、`MarkdownRenderer`。
