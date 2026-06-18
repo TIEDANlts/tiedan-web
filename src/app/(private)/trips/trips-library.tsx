@@ -16,6 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { uploadImageFile } from "@/lib/upload-client";
 import { cn } from "@/lib/utils";
 import { createTripAction, type TripActionState } from "@/modules/trips/actions";
 import type { TripListItem, TripsPageData } from "@/modules/trips/queries";
@@ -28,22 +29,6 @@ const initialActionState: TripActionState = {
 
 function statusHref(pathname: string, status: TripStatusValue) {
   return status === "DONE" ? `${pathname}?status=DONE` : pathname;
-}
-
-async function uploadTripCover(file: File) {
-  const formData = new FormData();
-  formData.set("file", file);
-  formData.set("area", "public");
-  formData.set("subdir", "trips/covers");
-
-  const response = await fetch("/api/upload", { method: "POST", body: formData });
-  const body = (await response.json()) as { url?: string; error?: string };
-
-  if (!response.ok || !body.url) {
-    throw new Error(body.error || "封面上传失败。");
-  }
-
-  return body.url;
 }
 
 function StatsBadge({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
@@ -112,7 +97,8 @@ function TripCoverInput({ coverUrl, setCoverUrl, error }: { coverUrl: string; se
     setUploadError(null);
     startUpload(async () => {
       try {
-        setCoverUrl(await uploadTripCover(file));
+        const { url } = await uploadImageFile(file, { area: "public", subdir: "trips/covers" });
+        setCoverUrl(url);
       } catch (error) {
         setUploadError(error instanceof Error ? error.message : "封面上传失败。");
       } finally {

@@ -5,6 +5,7 @@ import { useActionState, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { uploadImageFile } from "@/lib/upload-client";
 import { initialProfileSettingsActionState } from "@/modules/settings/action-state";
 import { saveProfileSettingsAction } from "@/modules/settings/actions";
 import type { ProfileSettings } from "@/modules/settings/settings";
@@ -30,23 +31,12 @@ export function SettingsForm({ profile }: { profile: ProfileSettings }) {
 
     setUploadError(null);
     startUpload(async () => {
-      const formData = new FormData();
-      formData.set("file", file);
-      formData.set("area", "public");
-      formData.set("subdir", "profile");
-
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const body = (await response.json()) as { url?: string; error?: string };
-
-      if (!response.ok || !body.url) {
-        setUploadError(body.error || "头像上传失败。");
-        return;
+      try {
+        const { url } = await uploadImageFile(file, { area: "public", subdir: "profile" });
+        setAvatar(url);
+      } catch (error) {
+        setUploadError(error instanceof Error ? error.message : "头像上传失败。");
       }
-
-      setAvatar(body.url);
     });
   }
 

@@ -5,6 +5,7 @@ import type { ChangeEvent } from "react";
 import { useState, useTransition } from "react";
 
 import { Input } from "@/components/ui/input";
+import { uploadImageFile } from "@/lib/upload-client";
 import { cn } from "@/lib/utils";
 import type { MediaActionState } from "@/modules/media/actions";
 
@@ -26,22 +27,7 @@ export function fieldClass() {
 }
 
 export async function uploadMediaCover(file: File) {
-  const formData = new FormData();
-  formData.set("file", file);
-  formData.set("area", "public");
-  formData.set("subdir", "media");
-
-  const response = await fetch("/api/upload", {
-    method: "POST",
-    body: formData,
-  });
-  const body = (await response.json()) as { url?: string; error?: string };
-
-  if (!response.ok || !body.url) {
-    throw new Error(body.error || "封面上传失败。");
-  }
-
-  return body.url;
+  return (await uploadImageFile(file, { area: "public", subdir: "media" })).url;
 }
 
 export function MediaCover({

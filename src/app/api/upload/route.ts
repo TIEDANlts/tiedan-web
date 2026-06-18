@@ -3,11 +3,15 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { assertLocalUploadSize, save, StorageError, type StorageArea } from "@/lib/storage";
 
+function uploadError(code: string, error: string, status: number) {
+  return NextResponse.json({ code, error }, { status });
+}
+
 export async function POST(request: Request) {
   const session = await auth();
 
   if (!session?.user) {
-    return NextResponse.json({ error: "请先登录后再上传文件。" }, { status: 401 });
+    return uploadError("UNAUTHORIZED", "请先登录后再上传文件。", 401);
   }
 
   try {
@@ -15,14 +19,14 @@ export async function POST(request: Request) {
     const file = formData.get("file");
 
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: "请选择要上传的图片。" }, { status: 400 });
+      return uploadError("MISSING_FILE", "请选择要上传的图片。", 400);
     }
 
     try {
       assertLocalUploadSize(file.size);
     } catch (error) {
       if (error instanceof StorageError) {
-        return NextResponse.json({ error: error.message }, { status: 413 });
+        return uploadError(error.code, error.message, 413);
       }
 
       throw error;
@@ -41,9 +45,10 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof StorageError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      const status = error.code === "FILE_TOO_LARGE" ? 413 : 400;
+      return uploadError(error.code, error.message, status);
     }
 
-    throw error;
+    return uploadError("PROCESSING_FAILED", "图片处理失败，请稍后再试或换一张图片。", 500);
   }
 }

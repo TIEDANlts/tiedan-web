@@ -2,7 +2,7 @@
 
 单用户个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
 
-当前进度：Stage 16 已完成首页聚合与活动时间线，网站第一个完整版本已收官；Stage 0-15 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 16 已接入公开首页、私密仪表盘、活动流、PWA 清单、全站数据导出和 404/error 收尾页。
+当前进度：Stage 16 已完成首页聚合与活动时间线，网站第一个完整版本已收官；Stage 0-15 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 16 已接入公开首页、私密仪表盘、活动流、PWA 清单、全站数据导出和 404/error 收尾页。收官后方案 A 加固已完成：上传入口具备 15MB 本地预检和结构化错误提示，远程图片转存错误可诊断，Activity 增加 orphan 只读诊断函数。
 
 ## 本地环境
 
@@ -218,6 +218,8 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 公开博客：`/blog` 与 `/blog/page/[page]` 展示已发布文章列表；`/blog/[slug]` 展示详情、桌面 TOC、上一篇/下一篇；草稿公开端 404。
 - 公开渲染策略：Stage 6A 为保证 `npm run build` 与 Docker/CI 构建不依赖构建期数据库，`/blog`、`/nav`、`/rss.xml` 暂时动态渲染；恢复静态化前需要重新设计构建期数据源或 ISR 策略。
 - 上传与文件：`POST /api/upload` 仅登录可用；`GET /uploads/**` 只服务 public 区文件并带长缓存头，匿名可访问博客图片；private 区文件只通过登录鉴权的 `/api/files/private/**` 读取。
+- 上传体验：所有前端 `/api/upload` 入口统一做 15MB 本地预检，只允许 jpeg/png/webp/gif；上传失败会区分文件过大、格式不支持、登录失效和服务端处理失败。远程图片转存会区分远端过大、下载失败、内容类型不支持和 SSRF 拦截。
+- Activity 诊断：`src/lib/activity-diagnostics.ts` 提供只读 orphan 检测，当前覆盖 posts/media/trips/expenses，不会自动删除历史记录。
 - RSS 与浏览量：`/rss.xml` 输出最近 20 篇已发布文章；详情页客户端挂载后通过 `/api/posts/view` 上报浏览量，同 IP 同文章短时去抖。
 - PWA：`manifest.webmanifest`、192/512 图标和 apple-touch-icon 已接入，添加到主屏幕后使用独立窗口名称和站点图标；当前不实现 Service Worker。
 - 通用组件：`PageHeader`、`EmptyState`、`ConfirmDialog`、`TagInput`、`StatusBadge`、`RatingStars`、`MarkdownEditor`、`MarkdownRenderer`。

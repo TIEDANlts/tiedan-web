@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 import { mediaDoneTitle, recordActivity, shouldRecordStatusTransition } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { formatShanghaiDate } from "@/lib/dayjs";
-import { saveFromUrl } from "@/lib/storage";
+import { remoteImageErrorMessage, saveFromUrl } from "@/lib/storage";
 import { executeMediaImportRows } from "@/modules/media/import-executor";
 import {
   guessMediaImportMapping,
@@ -136,11 +136,11 @@ export async function createMediaItemAction(
   let coverUrl: string | null;
   try {
     coverUrl = await localizeCoverUrl(input.data.coverUrl);
-  } catch {
+  } catch (error) {
     return {
       ok: false,
       message: "封面保存失败。",
-      errors: { coverUrl: "远程封面无法转存。可以改用本地上传。" },
+      errors: { coverUrl: remoteImageErrorMessage(error) },
     };
   }
 
@@ -191,11 +191,11 @@ export async function updateMediaItemAction(
   let coverUrl: string | null;
   try {
     coverUrl = await localizeCoverUrl(input.data.coverUrl);
-  } catch {
+  } catch (error) {
     return {
       ok: false,
       message: "封面保存失败。",
-      errors: { coverUrl: "远程封面无法转存。可以改用本地上传。" },
+      errors: { coverUrl: remoteImageErrorMessage(error) },
     };
   }
 

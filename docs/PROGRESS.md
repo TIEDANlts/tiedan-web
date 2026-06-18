@@ -9,6 +9,13 @@
 
 ## 修复日志
 
+### 2026-06-18 · 收官后上传、远程图片与 Activity 诊断加固
+- 完成内容：完成优化计划方案 A。前端所有 `/api/upload` 调用入口统一走 `src/lib/upload-client.ts`，在本地先做 15MB 与图片格式预检；上传 API 返回稳定 `code + error`，可区分文件过大、格式不支持、登录失效、缺少文件和服务端处理失败。`src/lib/http.ts` 新增 `OutboundFetchError`，`src/lib/storage.ts` 的 `StorageError` 增加稳定错误码，远程图片转存可区分远端过大、下载失败、内容类型不支持和 SSRF 拦截；游戏/书影后台表单按错误码展示更准确中文文案。新增只读 `findOrphanActivities()`，可诊断 posts/media/trips/expenses Activity 指向已删除记录的 orphan 项，暂不自动清理。
+- 关键文件：`src/lib/upload-client.ts`、`src/app/api/upload/route.ts`、`src/lib/http.ts`、`src/lib/storage.ts`、`src/lib/activity-diagnostics.ts`、`src/app/(private)/**` 上传入口、`src/modules/games/actions.ts`、`src/modules/media/actions.ts`，以及对应单测。
+- 关键决定与偏离：未新增第三方依赖，未改变 public/private 上传路径、sharp 管线、Activity 幂等唯一键或数据库 schema。方案 B/C/D 暂未混入本批次：B 是跨模块 Server Action 重构，C 是大 Client 组件拆分，D2/D3 涉及迁移与缓存策略，按计划应单独分支实施。
+- 遗留 TODO：继续按顺序推进方案 B（Server Action 与表单维护性重构）、方案 C（大 Client 组件拆分）；方案 D2/D3 执行前需要单独迁移/缓存验收计划。
+- 验证：`npx.cmd vitest run src/lib/upload-client.test.ts src/app/api/upload/route.test.ts src/lib/http.test.ts src/lib/storage.test.ts src/modules/links/favicon.test.ts src/modules/media/media-metadata.test.ts src/modules/media/media-import-executor.test.ts src/modules/games/steam.test.ts src/lib/activity-diagnostics.test.ts` 通过（9 个测试文件，38 条测试）；`npx.cmd tsc --noEmit` 通过。
+
 ### 2026-06-18 · 上传大小限制与活动流幂等加固
 - 完成内容：本地图片上传在读取 `arrayBuffer()` 前限制为 15MB，远程图片转存在 `content-length` 和流式读取两层限制为 8MB，超限返回中文错误；`Activity` 增加 `(module, action, refId)` 数据库唯一键，历史重复迁移时保留最早一条；`recordActivity()` 改为 `upsert`，重复记录只更新标题并保留原 `happenedAt`；文章发布逻辑移除 `hasActivity()` 先查后写。
 - 关键文件：`src/lib/storage.ts`、`src/app/api/upload/route.ts`、`src/lib/activity.ts`、`src/modules/posts/actions.ts`、`prisma/schema.prisma`、`prisma/migrations/20260618074000_add_activity_unique/migration.sql`、`src/lib/storage.test.ts`、`src/app/api/upload/route.test.ts`、`src/lib/activity.test.ts`、`src/lib/activity-actions.test.ts`。

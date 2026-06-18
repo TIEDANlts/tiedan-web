@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 
-import { fetchWithRetry } from "./http";
+import { fetchWithRetry, OutboundFetchError } from "./http";
 
 export type StorageArea = "public" | "private";
 
@@ -28,10 +28,42 @@ type SaveOptions = {
   filename?: string | null;
 };
 
+export type StorageErrorCode =
+  | "FILE_TOO_LARGE"
+  | "UNSUPPORTED_TYPE"
+  | "INVALID_PATH"
+  | "REMOTE_TOO_LARGE"
+  | "REMOTE_DOWNLOAD_FAILED"
+  | "REMOTE_UNSUPPORTED_TYPE"
+  | "REMOTE_SSRF_BLOCKED"
+  | "PROCESSING_FAILED";
+
 export class StorageError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    public readonly code: StorageErrorCode = "PROCESSING_FAILED",
+  ) {
     super(message);
     this.name = "StorageError";
+  }
+}
+
+export function remoteImageErrorMessage(error: unknown, fallback = "远程图片无法转存。可以改用本地上传。") {
+  if (!(error instanceof StorageError)) {
+    return fallback;
+  }
+
+  switch (error.code) {
+    case "REMOTE_TOO_LARGE":
+      return "远程图片超过 8MB，无法转存。可以先下载压缩后本地上传。";
+    case "REMOTE_UNSUPPORTED_TYPE":
+      return "远程图片格式不支持，只能转存 jpeg、png、webp 或 gif。";
+    case "REMOTE_SSRF_BLOCKED":
+      return "远程图片地址被安全策略拦截。请改用公开图片地址或本地上传。";
+    case "REMOTE_DOWNLOAD_FAILED":
+      return "远程图片下载失败。请检查链接是否可公开访问，或改用本地上传。";
+    default:
+      return fallback;
   }
 }
 
@@ -122,7 +154,7 @@ function assertInsideRoot(root: string, target: string) {
   const relative = path.relative(root, target);
 
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new StorageError("文件路径无效。");
+    throw new StorageError("文件路径无效。", "INVALID_PATH");
   }
 }
 
@@ -152,16 +184,30 @@ export function detectImageType(contentType?: string | null, filename?: string |
   const normalized = normalizedContentType(contentType) ?? contentTypeFromFilename(filename);
 
   if (normalized === "image/svg+xml" || filename?.toLowerCase().endsWith(".svg")) {
-    throw new StorageError("不支持上传 SVG 图片，请改用 jpeg、png、webp 或 gif。");
+    throw new StorageError("不支持上传 SVG 图片，请改用 jpeg、png、webp 或 gif。", "UNSUPPORTED_TYPE");
   }
 
   const detected = normalized ? IMAGE_TYPES.get(normalized) : null;
 
   if (!detected) {
-    throw new StorageError("只支持上传 jpeg、png、webp 或 gif 图片。");
+    throw new StorageError("只支持上传 jpeg、png、webp 或 gif 图片。", "UNSUPPORTED_TYPE");
   }
 
   return detected;
+}
+
+function toRemoteImageError(error: StorageError) {
+  if (error.code === "UNSUPPORTED_TYPE") {
+    return new StorageError(error.message, "REMOTE_UNSUPPORTED_TYPE");
+  }
+
+  return error;
+}
+
+function errorCode(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code?: unknown }).code)
+    : null;
 }
 
 function outputExtension(output: ImageOutput) {
@@ -178,13 +224,13 @@ function formatMegabytes(bytes: number) {
 
 export function assertLocalUploadSize(size: number) {
   if (size > LOCAL_UPLOAD_MAX_BYTES) {
-    throw new StorageError(`图片不能超过 ${formatMegabytes(LOCAL_UPLOAD_MAX_BYTES)}MB。`);
+    throw new StorageError(`图片不能超过 ${formatMegabytes(LOCAL_UPLOAD_MAX_BYTES)}MB。`, "FILE_TOO_LARGE");
   }
 }
 
 function assertRemoteImageSize(size: number) {
   if (size > REMOTE_IMAGE_MAX_BYTES) {
-    throw new StorageError(`远程图片不能超过 ${formatMegabytes(REMOTE_IMAGE_MAX_BYTES)}MB。`);
+    throw new StorageError(`远程图片不能超过 ${formatMegabytes(REMOTE_IMAGE_MAX_BYTES)}MB。`, "REMOTE_TOO_LARGE");
   }
 }
 
@@ -296,24 +342,41 @@ export async function save(buffer: Buffer, options: SaveOptions): Promise<SaveRe
 }
 
 export async function saveFromUrl(url: string, subdir: string) {
-  const response = await fetchWithRetry(url, {
-    headers: {
-      accept: "image/webp,image/png,image/jpeg,image/gif,*/*;q=0.8",
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetchWithRetry(url, {
+      headers: {
+        accept: "image/webp,image/png,image/jpeg,image/gif,*/*;q=0.8",
+      },
+    });
+  } catch (error) {
+    if ((error instanceof OutboundFetchError && error.code === "SSRF_BLOCKED") || errorCode(error) === "SSRF_BLOCKED") {
+      throw new StorageError("远程图片地址被安全策略拦截。", "REMOTE_SSRF_BLOCKED");
+    }
+
+    throw new StorageError("远程图片下载失败。", "REMOTE_DOWNLOAD_FAILED");
+  }
 
   if (!response.ok) {
-    throw new Error(`下载文件失败：${response.status}`);
+    throw new StorageError(`下载文件失败：${response.status}`, "REMOTE_DOWNLOAD_FAILED");
   }
 
   assertRemoteContentLength(response.headers);
 
-  return save(await readLimitedResponseBuffer(response, REMOTE_IMAGE_MAX_BYTES), {
-    area: "public",
-    subdir,
-    contentType: response.headers.get("content-type"),
-    filename: new URL(url).pathname.split("/").pop() ?? null,
-  });
+  try {
+    return await save(await readLimitedResponseBuffer(response, REMOTE_IMAGE_MAX_BYTES), {
+      area: "public",
+      subdir,
+      contentType: response.headers.get("content-type"),
+      filename: new URL(url).pathname.split("/").pop() ?? null,
+    });
+  } catch (error) {
+    if (error instanceof StorageError) {
+      throw toRemoteImageError(error);
+    }
+
+    throw error;
+  }
 }
 
 export function contentTypeForPublicPath(filePath: string) {
