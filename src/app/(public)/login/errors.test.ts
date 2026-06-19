@@ -1,6 +1,7 @@
-import { CallbackRouteError, CredentialsSignin } from "@auth/core/errors";
+import { AuthError, CallbackRouteError, CredentialsSignin } from "@auth/core/errors";
 import { describe, expect, it } from "vitest";
 
+import { LoginLockedError } from "@/lib/auth/rate-limit";
 import { loginErrorMessage, shouldRecordLoginFailure } from "./errors";
 
 describe("loginErrorMessage", () => {
@@ -19,5 +20,20 @@ describe("loginErrorMessage", () => {
 
   it("records rate-limit failures only for invalid credentials", () => {
     expect(shouldRecordLoginFailure(new CredentialsSignin())).toBe(true);
+  });
+
+  it("returns a lock message without recording another failure", () => {
+    const error = new LoginLockedError(121);
+
+    expect(loginErrorMessage(error)).toBe("尝试次数太多，请 3 分钟后再试。");
+    expect(shouldRecordLoginFailure(error)).toBe(false);
+  });
+
+  it("recognizes locked credentials errors wrapped by Auth.js callback handling", () => {
+    const error = new CallbackRouteError();
+    error.cause = { err: new LoginLockedError(61) } satisfies AuthError["cause"];
+
+    expect(loginErrorMessage(error)).toBe("尝试次数太多，请 2 分钟后再试。");
+    expect(shouldRecordLoginFailure(error)).toBe(false);
   });
 });

@@ -1,7 +1,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcrypt";
-import { db } from "@/lib/db";
+import { authorizeCredentials } from "@/lib/auth/credentials";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: {
@@ -17,34 +16,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         username: { label: "用户名", type: "text" },
         password: { label: "密码", type: "password" },
       },
-      async authorize(credentials) {
-        const username =
-          typeof credentials?.username === "string" ? credentials.username.trim() : "";
-        const password =
-          typeof credentials?.password === "string" ? credentials.password : "";
-
-        if (!username || !password) {
-          return null;
-        }
-
-        const user = await db.user.findUnique({
-          where: { username },
-        });
-
-        if (!user) {
-          return null;
-        }
-
-        const passwordMatches = await bcrypt.compare(password, user.passwordHash);
-
-        if (!passwordMatches) {
-          return null;
-        }
-
-        return {
-          id: user.id,
-          name: user.username,
-        };
+      async authorize(credentials, request) {
+        return authorizeCredentials(credentials, request);
       },
     }),
   ],
