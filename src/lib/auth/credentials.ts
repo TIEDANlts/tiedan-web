@@ -10,6 +10,9 @@ import {
 
 type CredentialsInput = Partial<Record<"username" | "password", unknown>> | undefined;
 
+const DUMMY_PASSWORD_HASH =
+  "$2b$10$CwTycUXWue0Thq9StjUM0uJ8cuD9VYxFKqI7mI1yucmmzcFcZnF7K";
+
 export function clientIpFromRequest(request: Request) {
   const forwardedFor = request.headers.get("x-forwarded-for");
   const realIp = request.headers.get("x-real-ip");
@@ -40,14 +43,10 @@ export async function authorizeCredentials(
     where: { username },
   });
 
-  if (!user) {
-    limiter.recordFailure(key);
-    return null;
-  }
+  const passwordHash = user?.passwordHash ?? DUMMY_PASSWORD_HASH;
+  const passwordMatches = await bcrypt.compare(password, passwordHash);
 
-  const passwordMatches = await bcrypt.compare(password, user.passwordHash);
-
-  if (!passwordMatches) {
+  if (!user || !passwordMatches) {
     limiter.recordFailure(key);
     return null;
   }

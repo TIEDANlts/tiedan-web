@@ -40,7 +40,7 @@ function requestFromIp(ip: string) {
 
 describe("credentials authorization", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it("extracts the first forwarded IP from the request", () => {
@@ -78,6 +78,25 @@ describe("credentials authorization", () => {
       limiter.recordFailure(key);
     }
     expect(limiter.getLock(key)).toMatchObject({ locked: true });
+  });
+
+  it("compares against a dummy hash and records a failure when the user does not exist", async () => {
+    const limiter = new LoginRateLimiter();
+    const recordFailure = vi.spyOn(limiter, "recordFailure");
+    const request = requestFromIp("203.0.113.24");
+    findUser.mockResolvedValue(null);
+    comparePassword.mockResolvedValue(false);
+
+    await expect(
+      authorizeCredentials({ username: "missing", password: "bad-password" }, request, limiter),
+    ).resolves.toBeNull();
+
+    expect(comparePassword).toHaveBeenCalledTimes(1);
+    expect(comparePassword).toHaveBeenCalledWith(
+      "bad-password",
+      expect.stringMatching(/^\$2[aby]\$/),
+    );
+    expect(recordFailure).toHaveBeenCalledWith(loginRateKey("203.0.113.24", "missing"));
   });
 
   it("throws a locked error before querying the database when the key is locked", async () => {

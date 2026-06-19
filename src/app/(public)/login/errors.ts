@@ -34,7 +34,3 @@ export function loginErrorMessage(error: unknown) {
 
   return "登录服务暂时不可用，请稍后再试。";
 }
-
-export function shouldRecordLoginFailure(error: unknown) {
-  return error instanceof CredentialsSignin && !loginLockedErrorFrom(error);
-}
