@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { expenseImportTitle, recordActivity } from "@/lib/activity";
 import { db } from "@/lib/db";
 import { buildExpenseImportPreview, normalizeImportRowsForCreate } from "@/modules/expenses/import-executor";
+import { validateExpenseImportFile } from "@/modules/expenses/import-limits";
 import { detectExpenseImportPlatform, parseExpenseImportFile, type ExpenseImportPlatform } from "@/modules/expenses/parsers";
 import { categorizeExpenseTransaction } from "@/modules/expenses/categorize";
 import { getExpenseCategoriesForCategorize, getExpenseCategoryOptions } from "@/modules/expenses/category-options";
@@ -14,8 +15,6 @@ import {
   readExpenseCategoryFormData,
   readManualTransactionFormData,
 } from "@/modules/expenses/utils";
-
-export const EXPENSE_IMPORT_MAX_BYTES = 10 * 1024 * 1024;
 
 async function requireExpenseSession() {
   const session = await auth();
@@ -312,22 +311,6 @@ function decodePayload(payload: string) {
 
 function isExpenseImportPlatform(value: string): value is ExpenseImportPlatform {
   return value === "alipay" || value === "wechat";
-}
-
-export function validateExpenseImportFile(file: unknown): { ok: true; file: File } | { ok: false; message: string } {
-  if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, message: "请选择要导入的微信或支付宝 CSV 文件。" };
-  }
-
-  if (file.size > EXPENSE_IMPORT_MAX_BYTES) {
-    return { ok: false, message: "账单文件不能超过 10MB，请拆分后导入。" };
-  }
-
-  if (!/\.csv$/i.test(file.name)) {
-    return { ok: false, message: "账单导入只支持 CSV 文件。" };
-  }
-
-  return { ok: true, file };
 }
 
 async function existingTxnNos(platform: ExpenseImportPlatform, txnNos: string[]) {

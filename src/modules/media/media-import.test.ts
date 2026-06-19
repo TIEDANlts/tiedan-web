@@ -31,7 +31,8 @@ vi.mock("@/lib/storage", () => ({
   saveFromUrl: vi.fn(),
 }));
 
-import { MEDIA_IMPORT_MAX_BYTES, parseMediaImportFileAction, validateMediaImportFile } from "./actions";
+import { parseMediaImportFileAction } from "./actions";
+import { MEDIA_IMPORT_MAX_BYTES, validateMediaImportFile } from "./import-limits";
 import {
   decodeMediaCsv,
   extractDoubanId,

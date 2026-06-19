@@ -25,10 +25,11 @@ vi.mock("@/lib/activity", () => ({
 }));
 
 import { categorizeExpenseTransaction } from "./categorize";
+import { EXPENSE_IMPORT_MAX_BYTES, validateExpenseImportFile } from "./import-limits";
 import { EXPENSE_IMPORT_MAX_COLUMNS, EXPENSE_IMPORT_MAX_ROWS } from "./parsers/common";
 import { buildExpenseImportPreview, normalizeImportRowsForCreate } from "./import-executor";
 import { detectExpenseImportPlatform, parseExpenseImportFile } from "./parsers";
-import { EXPENSE_IMPORT_MAX_BYTES, parseExpenseImportFileAction, validateExpenseImportFile } from "./actions";
+import { parseExpenseImportFileAction } from "./actions";
 
 const fixturePath = (...parts: string[]) => join(process.cwd(), "tests", "fixtures", ...parts);
 
