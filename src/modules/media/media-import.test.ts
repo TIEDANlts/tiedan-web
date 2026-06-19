@@ -31,7 +31,7 @@ vi.mock("@/lib/storage", () => ({
   saveFromUrl: vi.fn(),
 }));
 
-import { parseMediaImportFileAction } from "./actions";
+import { executeMediaImportAction, parseMediaImportFileAction } from "./actions";
 import { MEDIA_IMPORT_MAX_BYTES, validateMediaImportFile } from "./import-limits";
 import {
   decodeMediaCsv,
@@ -260,5 +260,39 @@ describe("media import file boundaries", () => {
     expect(() => parseMediaImportFile(Buffer.from(csv, "utf-8"), "douban.csv")).toThrow(
       `导入文件不能超过 ${MEDIA_IMPORT_MAX_COLUMNS} 列，请删减后再导入。`,
     );
+  });
+});
+
+describe("media import actions", () => {
+  it("reports invalid marked dates during execution instead of silently dropping rows", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "user-1" } });
+
+    await expect(
+      executeMediaImportAction({
+        rows: [{ 标题: "活着", 标记日期: "2026-02-31" }],
+        mapping: {
+          title: "标题",
+          type: null,
+          rating: null,
+          review: null,
+          markedAt: "标记日期",
+          link: null,
+          year: null,
+          coverUrl: null,
+          status: null,
+        },
+        defaults: {
+          defaultType: "BOOK",
+          defaultStatus: "DONE",
+          statusValueMap: {},
+        },
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      success: 0,
+      skipped: 0,
+      failed: 1,
+      reasons: [{ rowNumber: 1, type: "failed", message: "标记日期格式不正确。" }],
+    });
   });
 });

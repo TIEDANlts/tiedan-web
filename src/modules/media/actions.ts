@@ -445,7 +445,24 @@ export async function previewMediaImportAction(payload: MediaImportPayload): Pro
 export async function executeMediaImportAction(payload: MediaImportPayload): Promise<MediaImportExecuteState> {
   await requireMediaSession();
 
-  const rows: MediaImportRowData[] = normalizeRows(payload).flatMap((row) => (row.result.ok ? [row.result.data] : []));
+  const normalizedRows = normalizeRows(payload);
+  const rows: MediaImportRowData[] = [];
+  const rowNumbers: number[] = [];
+  const invalidReasons: Array<{ rowNumber: number; type: "failed"; message: string }> = [];
+
+  for (const row of normalizedRows) {
+    if (row.result.ok) {
+      rows.push(row.result.data);
+      rowNumbers.push(row.rowNumber);
+      continue;
+    }
+
+    invalidReasons.push({
+      rowNumber: row.rowNumber,
+      type: "failed",
+      message: row.result.errors.join("；"),
+    });
+  }
 
   const result = await executeMediaImportRows(rows, {
     async hasDoubanId(doubanId) {
@@ -466,10 +483,17 @@ export async function executeMediaImportAction(payload: MediaImportPayload): Pro
       await db.mediaItem.create({ data });
     },
   });
+  const reasons = [
+    ...invalidReasons,
+    ...result.reasons.map((reason) => ({
+      ...reason,
+      rowNumber: rowNumbers[reason.rowNumber - 1] ?? reason.rowNumber,
+    })),
+  ].sort((left, right) => left.rowNumber - right.rowNumber);
 
   revalidateMedia();
 
-  return { ok: true, ...result };
+  return { ok: true, ...result, failed: result.failed + invalidReasons.length, reasons };
 }
 
 export async function searchMediaMetadataAction(
