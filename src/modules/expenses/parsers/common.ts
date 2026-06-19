@@ -1,7 +1,9 @@
 import { TextDecoder } from "node:util";
+import { Prisma } from "@prisma/client";
 import iconv from "iconv-lite";
 import * as XLSX from "xlsx";
 
+import { MAX_DECIMAL_12_2, MAX_DECIMAL_12_2_TEXT } from "@/lib/money";
 import type {
   ExpenseImportEncoding,
   ExpenseImportParserOptions,
@@ -150,11 +152,20 @@ function normalizeDirection(rawDirection: string): TxnDirectionValue | null {
   return null;
 }
 
-function normalizeAmount(rawAmount: string) {
+function normalizeAmount(rawAmount: string): { value: string } | { error: string } {
   const amount = rawAmount.replace(/[¥￥,\s]/g, "");
   const match = amount.match(/^\d+(?:\.\d{1,2})?$/);
 
-  return match ? Number(amount).toFixed(2) : null;
+  if (!match) {
+    return { error: "金额格式不正确。" };
+  }
+
+  const value = new Prisma.Decimal(amount);
+  if (value.gt(MAX_DECIMAL_12_2)) {
+    return { error: `金额不能超过 ${MAX_DECIMAL_12_2_TEXT}。` };
+  }
+
+  return { value: value.toFixed(2) };
 }
 
 function normalizeTxnTime(rawTime: string) {
@@ -203,8 +214,8 @@ function validateRow(raw: Record<string, string>, options: ExpenseImportParserOp
   }
 
   const amount = normalizeAmount(readRequired(raw, options.amountHeader));
-  if (!amount) {
-    return "金额格式不正确。";
+  if ("error" in amount) {
+    return amount.error;
   }
 
   const txnNo = readRequired(raw, options.txnNoHeader);
@@ -218,7 +229,7 @@ function validateRow(raw: Record<string, string>, options: ExpenseImportParserOp
     merchant: readRequired(raw, options.merchantHeader) || null,
     item: readRequired(raw, options.itemHeader) || null,
     direction,
-    amount,
+    amount: amount.value,
     payMethod: readRequired(raw, options.payMethodHeader) || null,
     txnNo,
     raw,

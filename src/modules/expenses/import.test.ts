@@ -305,6 +305,29 @@ describe("parseExpenseImportFile column alignment", () => {
       txnNo: "ALI-MID-001",
     });
   });
+
+  it("rejects imported amounts beyond Decimal(12,2)", () => {
+    const csv = [
+      "支付宝交易记录明细",
+      "交易时间,收/支,金额,交易订单号,交易状态",
+      "2026-06-01 08:12:03,支出,9999999999.99,ALI-MAX-OK,交易成功",
+      "2026-06-01 08:13:03,支出,10000000000.00,ALI-MAX-BAD,交易成功",
+    ].join("\n");
+
+    const result = parseExpenseImportFile(Buffer.from(csv, "utf-8"), "alipay");
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      txnNo: "ALI-MAX-OK",
+      amount: "9999999999.99",
+    });
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        txnNo: "ALI-MAX-BAD",
+        message: "金额不能超过 9,999,999,999.99。",
+      }),
+    );
+  });
 });
 
 describe("expense import file boundaries", () => {
