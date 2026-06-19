@@ -55,8 +55,9 @@ function outboundDispatcher(): Dispatcher {
   }
 
   if (cachedProxyUrl !== proxyUrl) {
+    const proxyDispatcher = new ProxyAgent(proxyUrl);
     cachedProxyUrl = proxyUrl;
-    cachedProxyDispatcher = new ProxyAgent(proxyUrl);
+    cachedProxyDispatcher = proxyDispatcher;
   }
 
   return cachedProxyDispatcher as Dispatcher;

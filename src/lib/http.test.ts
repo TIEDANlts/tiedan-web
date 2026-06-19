@@ -61,4 +61,24 @@ describe("fetchWithRetry SSRF guard", () => {
         cause: expect.any(SsrfError),
       });
   });
+
+  it("does not reuse a stale proxy dispatcher after ProxyAgent rejects a new proxy URL", async () => {
+    process.env.OUTBOUND_PROXY = "http://127.0.0.1:9";
+    process.env.OUTBOUND_PROXY_TRUSTS_PRIVATE_GUARD = "1";
+
+    await expect(fetchWithRetry("https://example.com/", { retries: 0, timeoutMs: 1000 })).rejects.toMatchObject({
+      code: "DOWNLOAD_FAILED",
+    });
+
+    process.env.OUTBOUND_PROXY = "not-a-url";
+
+    await expect(fetchWithRetry("https://example.com/", { retries: 0, timeoutMs: 1000 })).rejects.toMatchObject({
+      code: "DOWNLOAD_FAILED",
+      cause: expect.objectContaining({ message: "Invalid URL" }),
+    });
+    await expect(fetchWithRetry("https://example.com/", { retries: 0, timeoutMs: 1000 })).rejects.toMatchObject({
+      code: "DOWNLOAD_FAILED",
+      cause: expect.objectContaining({ message: "Invalid URL" }),
+    });
+  });
 });
