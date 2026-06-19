@@ -202,6 +202,85 @@ describe("expense import executor helpers", () => {
     expect(rows[0].txnTime).toBeInstanceOf(Date);
     expect(rows[0].raw).toMatchObject({ 交易订单号: "ALI-EXP-001" });
   });
+
+  it("deduplicates repeated transaction numbers within the same file", () => {
+    const parsed = {
+      platform: "wechat" as const,
+      encoding: "utf8" as const,
+      filteredRows: [],
+      errors: [],
+      rows: [
+        {
+          txnNo: "DUP-1",
+          txnTime: "2026-06-01 10:00:00",
+          amount: "1.00",
+          direction: "EXPENSE" as const,
+          merchant: "A",
+          item: null,
+          payMethod: null,
+          sourceCategory: null,
+          raw: {},
+        },
+        {
+          txnNo: "DUP-1",
+          txnTime: "2026-06-01 10:01:00",
+          amount: "2.00",
+          direction: "EXPENSE" as const,
+          merchant: "B",
+          item: null,
+          payMethod: null,
+          sourceCategory: null,
+          raw: {},
+        },
+      ],
+    };
+
+    const preview = buildExpenseImportPreview(parsed, categories, new Set());
+    const rows = normalizeImportRowsForCreate(parsed, categories, new Set(), "batch-1");
+
+    expect(preview.stats).toMatchObject({
+      parsed: 2,
+      willImport: 1,
+      duplicate: 1,
+    });
+    expect(preview.rows.map((row) => ({ txnNo: row.txnNo, duplicate: row.duplicate, importable: row.importable }))).toEqual([
+      { txnNo: "DUP-1", duplicate: false, importable: true },
+      { txnNo: "DUP-1", duplicate: true, importable: false },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ txnNo: "DUP-1", amount: "1.00", merchant: "A" });
+  });
+
+  it("counts every existing duplicate row instead of unique duplicate transaction numbers", () => {
+    const parsed = {
+      platform: "wechat" as const,
+      encoding: "utf8" as const,
+      filteredRows: [],
+      errors: [],
+      rows: Array.from({ length: 3 }, (_, index) => ({
+        txnNo: "EXISTS-1",
+        txnTime: `2026-06-01 10:0${index}:00`,
+        amount: "1.00",
+        direction: "EXPENSE" as const,
+        merchant: `商户${index}`,
+        item: null,
+        payMethod: null,
+        sourceCategory: null,
+        raw: {},
+      })),
+    };
+
+    const preview = buildExpenseImportPreview(parsed, categories, new Set(["EXISTS-1"]));
+    const rows = normalizeImportRowsForCreate(parsed, categories, new Set(["EXISTS-1"]), "batch-1");
+
+    expect(preview.stats).toMatchObject({
+      parsed: 3,
+      willImport: 0,
+      duplicate: 3,
+    });
+    expect(preview.rows.every((row) => row.duplicate && !row.importable)).toBe(true);
+    expect(rows).toHaveLength(0);
+  });
 });
 
 describe("parseExpenseImportFile column alignment", () => {

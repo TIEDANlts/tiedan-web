@@ -5,7 +5,11 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { expenseImportTitle, recordActivity } from "@/lib/activity";
 import { db } from "@/lib/db";
-import { buildExpenseImportPreview, normalizeImportRowsForCreate } from "@/modules/expenses/import-executor";
+import {
+  analyzeExpenseImportDuplicates,
+  buildExpenseImportPreview,
+  normalizeImportRowsForCreate,
+} from "@/modules/expenses/import-executor";
 import { validateExpenseImportFile } from "@/modules/expenses/import-limits";
 import { detectExpenseImportPlatform, parseExpenseImportFile, type ExpenseImportPlatform } from "@/modules/expenses/parsers";
 import { categorizeExpenseTransaction } from "@/modules/expenses/categorize";
@@ -394,6 +398,7 @@ export async function executeExpenseImportAction(input: {
   const parsed = parseExpenseImportFile(decodePayload(input.payload), input.platform);
   const existingBefore = await existingTxnNos(input.platform, parsed.rows.map((row) => row.txnNo));
   const categories = await getExpenseCategoriesForCategorize();
+  const duplicateInfo = analyzeExpenseImportDuplicates(parsed, existingBefore);
 
   const result = await db.$transaction(async (tx) => {
     const batch = await tx.importBatch.create({
@@ -402,20 +407,20 @@ export async function executeExpenseImportAction(input: {
         filename: input.fileName,
         total: parsed.rows.length,
         inserted: 0,
-        skipped: existingBefore.size + parsed.filteredRows.length,
+        skipped: duplicateInfo.duplicateRows + parsed.filteredRows.length,
       },
     });
-    let inserted = 0;
-    let skipped = existingBefore.size + parsed.filteredRows.length;
-
-    for (const row of normalizeImportRowsForCreate(parsed, categories, existingBefore, batch.id)) {
-      try {
-        await tx.transaction.create({ data: row });
-        inserted += 1;
-      } catch {
-        skipped += 1;
-      }
-    }
+    const createRows = normalizeImportRowsForCreate(parsed, categories, existingBefore, batch.id);
+    const inserted =
+      createRows.length > 0
+        ? (
+            await tx.transaction.createMany({
+              data: createRows,
+              skipDuplicates: true,
+            })
+          ).count
+        : 0;
+    const skipped = duplicateInfo.duplicateRows + parsed.filteredRows.length + (createRows.length - inserted);
 
     await tx.importBatch.update({
       where: { id: batch.id },
