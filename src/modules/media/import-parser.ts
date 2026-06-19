@@ -2,6 +2,7 @@ import { TextDecoder } from "node:util";
 import iconv from "iconv-lite";
 import * as XLSX from "xlsx";
 
+import { parseStrictShanghaiDate } from "../../lib/dayjs";
 import {
   isMediaStatus,
   isMediaType,
@@ -306,16 +307,27 @@ function normalizeRating(rawRating: string) {
   return null;
 }
 
-function normalizeDateText(rawDate: string) {
+function normalizeDateText(rawDate: string): { value: string | null } | { error: string } {
   const value = rawDate.trim();
+
+  if (!value) {
+    return { value: null };
+  }
+
   const match = value.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
 
   if (!match) {
-    return null;
+    return { error: "标记日期格式不正确。" };
   }
 
   const [, year, month, day] = match;
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  const normalized = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+
+  if (!parseStrictShanghaiDate(normalized)) {
+    return { error: "标记日期格式不正确。" };
+  }
+
+  return { value: normalized };
 }
 
 function normalizeYear(rawYear: string) {
@@ -330,10 +342,15 @@ export function normalizeMediaImportRow(
   defaults: MediaImportDefaults,
 ): NormalizedMediaImportRow {
   const title = readMapped(row, mapping.title);
+  const markedAt = normalizeDateText(readMapped(row, mapping.markedAt));
   const errors: string[] = [];
 
   if (!title) {
     errors.push("标题为空。");
+  }
+
+  if ("error" in markedAt) {
+    errors.push(markedAt.error);
   }
 
   if (errors.length > 0) {
@@ -341,6 +358,7 @@ export function normalizeMediaImportRow(
   }
 
   const link = readMapped(row, mapping.link);
+  const markedAtValue = "value" in markedAt ? markedAt.value : null;
 
   return {
     ok: true,
@@ -350,7 +368,7 @@ export function normalizeMediaImportRow(
       status: normalizeImportStatus(readMapped(row, mapping.status), defaults.defaultStatus, defaults.statusValueMap),
       rating: normalizeRating(readMapped(row, mapping.rating)),
       reviewMd: readMapped(row, mapping.review) || null,
-      markedAt: normalizeDateText(readMapped(row, mapping.markedAt)),
+      markedAt: markedAtValue,
       doubanId: extractDoubanId(link),
       year: normalizeYear(readMapped(row, mapping.year)),
       coverUrl: readMapped(row, mapping.coverUrl) || null,

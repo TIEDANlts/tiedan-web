@@ -112,6 +112,71 @@ describe("media import parser", () => {
     });
   });
 
+  it("rejects rows with invalid marked dates", () => {
+    const result = normalizeMediaImportRow(
+      {
+        标题: "活着",
+        标记日期: "2026-02-31",
+      },
+      {
+        title: "标题",
+        type: null,
+        rating: null,
+        review: null,
+        markedAt: "标记日期",
+        link: null,
+        year: null,
+        coverUrl: null,
+        status: null,
+      },
+      {
+        defaultType: "BOOK",
+        defaultStatus: "DONE",
+        statusValueMap: {},
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.errors).toContain("标记日期格式不正确。");
+  });
+
+  it("accepts leap-day marked dates and keeps empty dates null", () => {
+    const mapping = {
+      title: "标题",
+      type: null,
+      rating: null,
+      review: null,
+      markedAt: "标记日期",
+      link: null,
+      year: null,
+      coverUrl: null,
+      status: null,
+    };
+    const defaults = {
+      defaultType: "BOOK" as const,
+      defaultStatus: "DONE" as const,
+      statusValueMap: {},
+    };
+
+    expect(
+      normalizeMediaImportRow({ 标题: "Leap day", 标记日期: "2024-02-29" }, mapping, defaults),
+    ).toMatchObject({
+      ok: true,
+      data: {
+        markedAt: "2024-02-29",
+      },
+    });
+
+    expect(
+      normalizeMediaImportRow({ 标题: "No date", 标记日期: "" }, mapping, defaults),
+    ).toMatchObject({
+      ok: true,
+      data: {
+        markedAt: null,
+      },
+    });
+  });
+
   it("falls back to gbk when utf-8 decoding produces replacement characters", async () => {
     const utf8Text = await readFile(fixturePath, "utf8");
     const gbkBuffer = iconv.encode(utf8Text, "gbk");

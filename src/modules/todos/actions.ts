@@ -73,12 +73,19 @@ export async function updateTodoPriorityAction(id: string, priority: number) {
 export async function updateTodoDateAction(id: string, date: string | null) {
   await requireTodoSession();
 
+  const parsedDate = dateToTodoDb(date);
+  if (date && !parsedDate) {
+    return { ok: false, message: "日期格式不正确。" };
+  }
+
   await db.todo.update({
     where: { id },
-    data: { date: dateToTodoDb(date) },
+    data: { date: parsedDate },
   });
 
   revalidateTodos();
+
+  return { ok: true, message: "日期已更新。" };
 }
 
 export async function deleteTodoAction(id: string) {

@@ -83,6 +83,38 @@ describe("normalizeTripInput", () => {
     expect(result.ok).toBe(false);
     expect(result.ok ? null : result.errors.endDate).toBe("结束日期不能早于开始日期。");
   });
+
+  it("rejects normalized invalid trip dates", () => {
+    const result = normalizeTripInput({
+      title: "Invalid dates",
+      startDate: "2026-02-31",
+      endDate: "2026-13-01",
+      destinations: "Hangzhou",
+      status: "PLANNED",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.errors.startDate).toBeTruthy();
+    expect(result.ok ? null : result.errors.endDate).toBeTruthy();
+  });
+
+  it("accepts leap-day trip dates", () => {
+    const result = normalizeTripInput({
+      title: "Leap day",
+      startDate: "2024-02-29",
+      endDate: "2024-02-29",
+      destinations: "Hangzhou",
+      status: "PLANNED",
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        startDate: new Date("2024-02-29T00:00:00.000Z"),
+        endDate: new Date("2024-02-29T00:00:00.000Z"),
+      },
+    });
+  });
 });
 
 describe("readTripFormData", () => {
