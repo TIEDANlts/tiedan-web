@@ -31,6 +31,17 @@ describe("parseExpenseStatsParams", () => {
       year: "2026",
     });
   });
+
+  it("uses the ISO week-year around calendar year boundaries", () => {
+    expect(parseExpenseStatsParams({ view: "week" }, new Date("2024-12-30T04:00:00.000Z"))).toMatchObject({
+      view: "week",
+      week: "2025-W01",
+      prevWeek: "2024-W52",
+      nextWeek: "2025-W02",
+    });
+
+    expect(parseExpenseStatsParams({ view: "week", week: "2025-W01" }).week).toBe("2025-W01");
+  });
 });
 
 describe("expense stats calculations", () => {

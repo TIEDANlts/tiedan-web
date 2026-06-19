@@ -48,7 +48,9 @@ function isValidWeek(value: string) {
 
 function toWeekValue(input: Date | ReturnType<typeof dayjs>) {
   const date = "format" in input ? input : toShanghaiTime(input);
-  return `${date.format("YYYY")}-W${date.isoWeek().toString().padStart(2, "0")}`;
+  const isoYear = date.startOf("isoWeek").add(3, "day").year();
+
+  return `${isoYear}-W${date.isoWeek().toString().padStart(2, "0")}`;
 }
 
 function weekStart(week: string) {
