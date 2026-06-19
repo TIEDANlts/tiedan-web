@@ -10,6 +10,7 @@ import { remoteImageErrorMessage, saveFromUrl } from "@/lib/storage";
 import { executeMediaImportRows } from "@/modules/media/import-executor";
 import {
   guessMediaImportMapping,
+  MediaImportLimitError,
   normalizeMediaImportRow,
   parseMediaImportFile,
   type MediaImportDefaults,
@@ -31,6 +32,8 @@ import {
   type MediaStatusValue,
   type MediaTypeValue,
 } from "@/modules/media/utils";
+
+export const MEDIA_IMPORT_MAX_BYTES = 20 * 1024 * 1024;
 
 async function requireMediaSession() {
   const session = await auth();
@@ -288,6 +291,22 @@ export type MediaImportExecuteState =
     }
   | { ok: false; message: string };
 
+export function validateMediaImportFile(file: unknown): { ok: true; file: File } | { ok: false; message: string } {
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, message: "请选择要导入的 CSV 或 XLSX 文件。" };
+  }
+
+  if (file.size > MEDIA_IMPORT_MAX_BYTES) {
+    return { ok: false, message: "书影导入文件不能超过 20MB，请拆分后导入。" };
+  }
+
+  if (!/\.(csv|xlsx|xls)$/i.test(file.name)) {
+    return { ok: false, message: "只支持 CSV 或 XLSX 文件。" };
+  }
+
+  return { ok: true, file };
+}
+
 function normalizeRows(payload: MediaImportPayload) {
   return payload.rows.map((row, index) => ({
     rowNumber: index + 1,
@@ -341,6 +360,11 @@ async function isDuplicateImportRow(
 export async function parseMediaImportFileAction(formData: FormData): Promise<MediaImportParseState> {
   await requireMediaSession();
 
+  const validation = validateMediaImportFile(formData.get("file"));
+  if (!validation.ok) {
+    return validation;
+  }
+
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, message: "请选择要导入的 CSV 或 XLSX 文件。" };
@@ -362,7 +386,11 @@ export async function parseMediaImportFileAction(formData: FormData): Promise<Me
       parsed,
       mapping: guessMediaImportMapping(parsed.headers),
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof MediaImportLimitError) {
+      return { ok: false, message: error.message };
+    }
+
     return { ok: false, message: "文件解析失败，请确认导出文件没有损坏。" };
   }
 }

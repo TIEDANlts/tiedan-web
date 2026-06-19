@@ -51,6 +51,16 @@ export type ParsedMediaImportFile = {
   encoding: MediaImportEncoding | null;
 };
 
+export const MEDIA_IMPORT_MAX_ROWS = 20000;
+export const MEDIA_IMPORT_MAX_COLUMNS = 100;
+
+export class MediaImportLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MediaImportLimitError";
+  }
+}
+
 const headerKeywords: Record<keyof MediaImportMapping, string[]> = {
   title: ["书影音名", "标题", "名称", "片名", "书名", "title", "name"],
   type: ["类型", "类别", "分类", "type", "category"],
@@ -73,6 +83,16 @@ function compactRows(sheetRows: unknown[][]) {
   const rows = sheetRows
     .map((row) => row.map(trimCell))
     .filter((row) => row.some(Boolean));
+  const maxColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
+
+  if (rows.length > MEDIA_IMPORT_MAX_ROWS) {
+    throw new MediaImportLimitError(`导入文件不能超过 ${MEDIA_IMPORT_MAX_ROWS} 行，请拆分后再导入。`);
+  }
+
+  if (maxColumns > MEDIA_IMPORT_MAX_COLUMNS) {
+    throw new MediaImportLimitError(`导入文件不能超过 ${MEDIA_IMPORT_MAX_COLUMNS} 列，请删减后再导入。`);
+  }
+
   const headers = rows[0] ?? [];
 
   return {

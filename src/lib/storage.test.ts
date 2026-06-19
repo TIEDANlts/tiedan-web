@@ -180,6 +180,23 @@ describe("save", () => {
     expect(result.url).toMatch(/^\/api\/files\/private\/trips\/\d+-[a-f0-9-]+\.webp$/);
     expect(result.thumbUrl).toMatch(/^\/api\/files\/private\/trips\/\d+-[a-f0-9-]+-thumb\.webp$/);
   });
+
+  it("rejects svg bytes even when the upload claims to be a png", async () => {
+    const disguisedSvg = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="red"/></svg>',
+    );
+
+    await expect(
+      save(disguisedSvg, {
+        area: "public",
+        subdir: "posts",
+        contentType: "image/png",
+        filename: "cover.png",
+      }),
+    ).rejects.toMatchObject({
+      code: "UNSUPPORTED_TYPE",
+    });
+  });
 });
 
 describe("saveFromUrl", () => {

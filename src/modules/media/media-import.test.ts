@@ -1,12 +1,38 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import iconv from "iconv-lite";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@/auth", () => ({
+  auth: vi.fn(),
+}));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+}));
+
+vi.mock("@/lib/db", () => ({
+  db: {},
+}));
+
+vi.mock("@/lib/activity", () => ({
+  mediaDoneTitle: vi.fn(),
+  recordActivity: vi.fn(),
+  shouldRecordStatusTransition: vi.fn(),
+}));
+
+vi.mock("@/lib/storage", () => ({
+  remoteImageErrorMessage: vi.fn(),
+  saveFromUrl: vi.fn(),
+}));
+
+import { MEDIA_IMPORT_MAX_BYTES, validateMediaImportFile } from "./actions";
 import {
   decodeMediaCsv,
   extractDoubanId,
   guessMediaImportMapping,
+  MEDIA_IMPORT_MAX_COLUMNS,
+  MEDIA_IMPORT_MAX_ROWS,
   normalizeMediaImportRow,
   parseMediaImportFile,
 } from "./import-parser";
@@ -90,5 +116,40 @@ describe("media import parser", () => {
     expect(decoded.encoding).toBe("gbk");
     expect(decoded.text).toContain("书影音名");
     expect(decoded.text).toContain("花样年华");
+  });
+});
+
+describe("media import file boundaries", () => {
+  it("rejects oversized files before reading arrayBuffer", () => {
+    const arrayBuffer = vi.fn();
+    const file = new File([new Uint8Array(1)], "douban.csv", { type: "text/csv" });
+
+    Object.defineProperty(file, "size", { value: MEDIA_IMPORT_MAX_BYTES + 1 });
+    Object.defineProperty(file, "arrayBuffer", { value: arrayBuffer });
+
+    const result = validateMediaImportFile(file);
+
+    expect(result).toEqual({ ok: false, message: "书影导入文件不能超过 20MB，请拆分后导入。" });
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  it("throws a clear error when the import has too many rows", () => {
+    const csv = [
+      "标题,类型",
+      ...Array.from({ length: MEDIA_IMPORT_MAX_ROWS + 1 }, (_, index) => `条目${index},BOOK`),
+    ].join("\n");
+
+    expect(() => parseMediaImportFile(Buffer.from(csv, "utf-8"), "douban.csv")).toThrow(
+      `导入文件不能超过 ${MEDIA_IMPORT_MAX_ROWS} 行，请拆分后再导入。`,
+    );
+  });
+
+  it("throws a clear error when the import has too many columns", () => {
+    const headers = Array.from({ length: MEDIA_IMPORT_MAX_COLUMNS + 1 }, (_, index) => `列${index}`);
+    const csv = [headers.join(","), headers.map(() => "值").join(",")].join("\n");
+
+    expect(() => parseMediaImportFile(Buffer.from(csv, "utf-8"), "douban.csv")).toThrow(
+      `导入文件不能超过 ${MEDIA_IMPORT_MAX_COLUMNS} 列，请删减后再导入。`,
+    );
   });
 });

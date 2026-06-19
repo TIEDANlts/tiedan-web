@@ -13,6 +13,9 @@ import type { TxnDirectionValue } from "../utils";
 
 const filteredStatuses = new Set(["交易关闭", "已全额退款"]);
 
+export const EXPENSE_IMPORT_MAX_ROWS = 20000;
+export const EXPENSE_IMPORT_MAX_COLUMNS = 100;
+
 function cleanText(value: unknown) {
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
     ? String(value).replace(/^\uFEFF/, "").trim()
@@ -53,6 +56,20 @@ function readSheetRows(text: string) {
     defval: "",
     raw: false,
   });
+}
+
+function importLimitError(
+  options: ExpenseImportParserOptions,
+  encoding: ExpenseImportEncoding,
+  message: string,
+): ParsedExpenseImportFile {
+  return {
+    platform: options.platform,
+    encoding,
+    rows: [],
+    filteredRows: [],
+    errors: [{ rowNumber: 0, txnNo: null, message, raw: {} }],
+  };
 }
 
 function findHeaderIndex(rows: string[][]) {
@@ -171,6 +188,16 @@ function validateRow(raw: Record<string, string>, options: ExpenseImportParserOp
 export function parseExpenseCsv(buffer: Buffer, options: ExpenseImportParserOptions): ParsedExpenseImportFile {
   const decoded = decodeExpenseCsv(buffer);
   const rows = readSheetRows(decoded.text).map((row) => row.map(cleanText));
+  const maxColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
+
+  if (rows.length > EXPENSE_IMPORT_MAX_ROWS) {
+    return importLimitError(options, decoded.encoding, `导入文件不能超过 ${EXPENSE_IMPORT_MAX_ROWS} 行，请拆分后再导入。`);
+  }
+
+  if (maxColumns > EXPENSE_IMPORT_MAX_COLUMNS) {
+    return importLimitError(options, decoded.encoding, `导入文件不能超过 ${EXPENSE_IMPORT_MAX_COLUMNS} 列，请删减后再导入。`);
+  }
+
   const headerIndex = findHeaderIndex(rows);
   const parsedRows: ParsedExpenseImportRow[] = [];
   const filteredRows: FilteredExpenseImportRow[] = [];
