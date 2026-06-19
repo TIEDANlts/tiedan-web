@@ -103,6 +103,27 @@ describe("normalizeManualTransactionInput", () => {
       },
     });
   });
+
+  it("rejects amounts beyond Decimal(12,2)", () => {
+    const result = normalizeManualTransactionInput(
+      {
+        amount: "10000000000.00",
+        direction: "EXPENSE",
+        categoryId: "food",
+        date: "2026-06-15",
+        merchant: "咖啡店",
+        note: "",
+      },
+      categories,
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      errors: {
+        amount: "金额不能超过 9,999,999,999.99。",
+      },
+    });
+  });
 });
 
 describe("readManualTransactionFormData", () => {

@@ -6,6 +6,9 @@ export type NormalizedMoneyAmount =
   | { ok: true; value: Prisma.Decimal }
   | { ok: false; error: string };
 
+export const MAX_DECIMAL_12_2 = new Prisma.Decimal("9999999999.99");
+export const MAX_DECIMAL_12_2_TEXT = "9,999,999,999.99";
+
 function stringValue(value: unknown) {
   return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
 }
@@ -43,6 +46,10 @@ export function normalizeMoneyAmount(rawAmount: unknown): NormalizedMoneyAmount 
   const value = new Prisma.Decimal(amount);
   if (value.lte(0)) {
     return { ok: false, error: "金额必须大于 0。" };
+  }
+
+  if (value.gt(MAX_DECIMAL_12_2)) {
+    return { ok: false, error: `金额不能超过 ${MAX_DECIMAL_12_2_TEXT}。` };
   }
 
   return { ok: true, value };

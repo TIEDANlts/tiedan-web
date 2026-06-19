@@ -115,6 +115,24 @@ describe("normalizeTripInput", () => {
       },
     });
   });
+
+  it("rejects budgets beyond Decimal(12,2)", () => {
+    const result = normalizeTripInput({
+      title: "预算过大",
+      startDate: "2026-06-15",
+      endDate: "2026-06-17",
+      destinations: "杭州",
+      status: "PLANNED",
+      budget: "10000000000.00",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      errors: {
+        budget: "预算不能超过 9,999,999,999.99。",
+      },
+    });
+  });
 });
 
 describe("readTripFormData", () => {

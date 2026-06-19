@@ -30,4 +30,12 @@ describe("normalizeMoneyAmount", () => {
     expect(normalizeMoneyAmount("-1")).toEqual({ ok: false, error: "金额必须是最多两位小数的正数。" });
     expect(normalizeMoneyAmount("1.234")).toEqual({ ok: false, error: "金额必须是最多两位小数的正数。" });
   });
+
+  it("rejects values beyond Decimal(12,2)", () => {
+    expect(normalizeMoneyAmount("9999999999.99")).toMatchObject({ ok: true });
+    expect(normalizeMoneyAmount("10000000000.00")).toEqual({
+      ok: false,
+      error: "金额不能超过 9,999,999,999.99。",
+    });
+  });
 });
