@@ -1,9 +1,14 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import * as XLSX from "xlsx";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/auth", () => ({
+const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
+}));
+
+vi.mock("@/auth", () => ({
+  auth: mocks.auth,
 }));
 
 vi.mock("next/cache", () => ({
@@ -23,7 +28,7 @@ import { categorizeExpenseTransaction } from "./categorize";
 import { EXPENSE_IMPORT_MAX_COLUMNS, EXPENSE_IMPORT_MAX_ROWS } from "./parsers/common";
 import { buildExpenseImportPreview, normalizeImportRowsForCreate } from "./import-executor";
 import { detectExpenseImportPlatform, parseExpenseImportFile } from "./parsers";
-import { EXPENSE_IMPORT_MAX_BYTES, validateExpenseImportFile } from "./actions";
+import { EXPENSE_IMPORT_MAX_BYTES, parseExpenseImportFileAction, validateExpenseImportFile } from "./actions";
 
 const fixturePath = (...parts: string[]) => join(process.cwd(), "tests", "fixtures", ...parts);
 
@@ -236,6 +241,23 @@ describe("expense import file boundaries", () => {
     expect(arrayBuffer).not.toHaveBeenCalled();
   });
 
+  it("rejects oversized files in the server action before reading arrayBuffer", async () => {
+    const arrayBuffer = vi.fn();
+    const file = new File([new Uint8Array(1)], "alipay.csv", { type: "text/csv" });
+    const formData = new FormData();
+
+    Object.defineProperty(file, "size", { value: EXPENSE_IMPORT_MAX_BYTES + 1 });
+    Object.defineProperty(file, "arrayBuffer", { value: arrayBuffer });
+    formData.set("file", file);
+    mocks.auth.mockResolvedValue({ user: { id: "user-1" } });
+
+    await expect(parseExpenseImportFileAction(formData)).resolves.toEqual({
+      ok: false,
+      message: "账单文件不能超过 10MB，请拆分后导入。",
+    });
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
   it("returns a parser error when the CSV has too many rows", () => {
     const csv = [
       "支付宝交易记录明细",
@@ -254,6 +276,31 @@ describe("expense import file boundaries", () => {
         message: `导入文件不能超过 ${EXPENSE_IMPORT_MAX_ROWS} 行，请拆分后再导入。`,
       }),
     );
+  });
+
+  it("does not expand oversized CSV sheets with sheet_to_json", () => {
+    const csv = [
+      "支付宝交易记录明细",
+      "交易时间,收/支,金额,交易订单号,交易状态",
+      ...Array.from({ length: EXPENSE_IMPORT_MAX_ROWS + 1 }, (_, index) =>
+        `2026-06-01 08:12:03,支出,18.50,ALI-LIMIT-${index},交易成功`,
+      ),
+    ].join("\n");
+    const sheetToJson = vi.spyOn(XLSX.utils, "sheet_to_json");
+
+    try {
+      const result = parseExpenseImportFile(Buffer.from(csv, "utf-8"), "alipay");
+
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          rowNumber: 0,
+          message: `导入文件不能超过 ${EXPENSE_IMPORT_MAX_ROWS} 行，请拆分后再导入。`,
+        }),
+      );
+      expect(sheetToJson).not.toHaveBeenCalled();
+    } finally {
+      sheetToJson.mockRestore();
+    }
   });
 
   it("returns a parser error when the CSV has too many columns", () => {

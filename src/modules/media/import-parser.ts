@@ -54,6 +54,8 @@ export type ParsedMediaImportFile = {
 export const MEDIA_IMPORT_MAX_ROWS = 20000;
 export const MEDIA_IMPORT_MAX_COLUMNS = 100;
 
+type SheetToJsonOptionsWithLimit = XLSX.Sheet2JSONOpts & { sheetRows: number };
+
 export class MediaImportLimitError extends Error {
   constructor(message: string) {
     super(message);
@@ -103,6 +105,33 @@ function compactRows(sheetRows: unknown[][]) {
   };
 }
 
+function sheetDimensions(sheet: XLSX.WorkSheet) {
+  const ref = sheet["!ref"];
+
+  if (!ref) {
+    return { rows: 0, columns: 0 };
+  }
+
+  const range = XLSX.utils.decode_range(ref);
+
+  return {
+    rows: range.e.r - range.s.r + 1,
+    columns: range.e.c - range.s.c + 1,
+  };
+}
+
+function assertSheetWithinLimits(sheet: XLSX.WorkSheet) {
+  const dimensions = sheetDimensions(sheet);
+
+  if (dimensions.rows > MEDIA_IMPORT_MAX_ROWS) {
+    throw new MediaImportLimitError(`导入文件不能超过 ${MEDIA_IMPORT_MAX_ROWS} 行，请拆分后再导入。`);
+  }
+
+  if (dimensions.columns > MEDIA_IMPORT_MAX_COLUMNS) {
+    throw new MediaImportLimitError(`导入文件不能超过 ${MEDIA_IMPORT_MAX_COLUMNS} 列，请删减后再导入。`);
+  }
+}
+
 function parseWorkbook(bufferOrText: Buffer | string, type: "buffer" | "string") {
   const workbook = XLSX.read(bufferOrText, { type, raw: true });
   const firstSheetName = workbook.SheetNames[0];
@@ -112,12 +141,18 @@ function parseWorkbook(bufferOrText: Buffer | string, type: "buffer" | "string")
     return { headers: [], rows: [] };
   }
 
+  assertSheetWithinLimits(firstSheet);
+
   return compactRows(
-    XLSX.utils.sheet_to_json<unknown[]>(firstSheet, {
-      header: 1,
-      defval: "",
-      raw: false,
-    }),
+    XLSX.utils.sheet_to_json<unknown[]>(
+      firstSheet,
+      {
+        header: 1,
+        defval: "",
+        raw: false,
+        sheetRows: MEDIA_IMPORT_MAX_ROWS + 1,
+      } as SheetToJsonOptionsWithLimit,
+    ),
   );
 }
 

@@ -16,6 +16,8 @@ const filteredStatuses = new Set(["交易关闭", "已全额退款"]);
 export const EXPENSE_IMPORT_MAX_ROWS = 20000;
 export const EXPENSE_IMPORT_MAX_COLUMNS = 100;
 
+type SheetToJsonOptionsWithLimit = XLSX.Sheet2JSONOpts & { sheetRows: number };
+
 function cleanText(value: unknown) {
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
     ? String(value).replace(/^\uFEFF/, "").trim()
@@ -42,20 +44,58 @@ export function decodeExpenseCsv(buffer: Buffer): { text: string; encoding: Expe
   };
 }
 
-function readSheetRows(text: string) {
+function sheetDimensions(sheet: XLSX.WorkSheet) {
+  const ref = sheet["!ref"];
+
+  if (!ref) {
+    return { rows: 0, columns: 0 };
+  }
+
+  const range = XLSX.utils.decode_range(ref);
+
+  return {
+    rows: range.e.r - range.s.r + 1,
+    columns: range.e.c - range.s.c + 1,
+  };
+}
+
+function readSheetRows(text: string, options: ExpenseImportParserOptions, encoding: ExpenseImportEncoding) {
   const workbook = XLSX.read(text, { type: "string", raw: true });
   const sheetName = workbook.SheetNames[0];
   const sheet = sheetName ? workbook.Sheets[sheetName] : null;
 
   if (!sheet) {
-    return [];
+    return { ok: true as const, rows: [] };
   }
 
-  return XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    defval: "",
-    raw: false,
-  });
+  const dimensions = sheetDimensions(sheet);
+
+  if (dimensions.rows > EXPENSE_IMPORT_MAX_ROWS) {
+    return {
+      ok: false as const,
+      parsed: importLimitError(options, encoding, `导入文件不能超过 ${EXPENSE_IMPORT_MAX_ROWS} 行，请拆分后再导入。`),
+    };
+  }
+
+  if (dimensions.columns > EXPENSE_IMPORT_MAX_COLUMNS) {
+    return {
+      ok: false as const,
+      parsed: importLimitError(options, encoding, `导入文件不能超过 ${EXPENSE_IMPORT_MAX_COLUMNS} 列，请删减后再导入。`),
+    };
+  }
+
+  return {
+    ok: true as const,
+    rows: XLSX.utils.sheet_to_json<unknown[]>(
+      sheet,
+      {
+        header: 1,
+        defval: "",
+        raw: false,
+        sheetRows: EXPENSE_IMPORT_MAX_ROWS + 1,
+      } as SheetToJsonOptionsWithLimit,
+    ),
+  };
 }
 
 function importLimitError(
@@ -187,7 +227,13 @@ function validateRow(raw: Record<string, string>, options: ExpenseImportParserOp
 
 export function parseExpenseCsv(buffer: Buffer, options: ExpenseImportParserOptions): ParsedExpenseImportFile {
   const decoded = decodeExpenseCsv(buffer);
-  const rows = readSheetRows(decoded.text).map((row) => row.map(cleanText));
+  const sheetRows = readSheetRows(decoded.text, options, decoded.encoding);
+
+  if (!sheetRows.ok) {
+    return sheetRows.parsed;
+  }
+
+  const rows = sheetRows.rows.map((row) => row.map(cleanText));
   const maxColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
 
   if (rows.length > EXPENSE_IMPORT_MAX_ROWS) {

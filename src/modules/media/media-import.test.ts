@@ -1,10 +1,15 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import iconv from "iconv-lite";
+import * as XLSX from "xlsx";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/auth", () => ({
+const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
+}));
+
+vi.mock("@/auth", () => ({
+  auth: mocks.auth,
 }));
 
 vi.mock("next/cache", () => ({
@@ -26,7 +31,7 @@ vi.mock("@/lib/storage", () => ({
   saveFromUrl: vi.fn(),
 }));
 
-import { MEDIA_IMPORT_MAX_BYTES, validateMediaImportFile } from "./actions";
+import { MEDIA_IMPORT_MAX_BYTES, parseMediaImportFileAction, validateMediaImportFile } from "./actions";
 import {
   decodeMediaCsv,
   extractDoubanId,
@@ -133,6 +138,23 @@ describe("media import file boundaries", () => {
     expect(arrayBuffer).not.toHaveBeenCalled();
   });
 
+  it("rejects oversized files in the server action before reading arrayBuffer", async () => {
+    const arrayBuffer = vi.fn();
+    const file = new File([new Uint8Array(1)], "douban.csv", { type: "text/csv" });
+    const formData = new FormData();
+
+    Object.defineProperty(file, "size", { value: MEDIA_IMPORT_MAX_BYTES + 1 });
+    Object.defineProperty(file, "arrayBuffer", { value: arrayBuffer });
+    formData.set("file", file);
+    mocks.auth.mockResolvedValue({ user: { id: "user-1" } });
+
+    await expect(parseMediaImportFileAction(formData)).resolves.toEqual({
+      ok: false,
+      message: "书影导入文件不能超过 20MB，请拆分后导入。",
+    });
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
   it("throws a clear error when the import has too many rows", () => {
     const csv = [
       "标题,类型",
@@ -142,6 +164,27 @@ describe("media import file boundaries", () => {
     expect(() => parseMediaImportFile(Buffer.from(csv, "utf-8"), "douban.csv")).toThrow(
       `导入文件不能超过 ${MEDIA_IMPORT_MAX_ROWS} 行，请拆分后再导入。`,
     );
+  });
+
+  it("does not expand oversized XLSX sheets with sheet_to_json", () => {
+    const workbook = XLSX.utils.book_new();
+    const sheet: XLSX.WorkSheet = {
+      "!ref": `A1:A${MEDIA_IMPORT_MAX_ROWS + 2}`,
+      A1: { t: "s", v: "标题" },
+    };
+
+    XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    const sheetToJson = vi.spyOn(XLSX.utils, "sheet_to_json");
+
+    try {
+      expect(() => parseMediaImportFile(buffer, "douban.xlsx")).toThrow(
+        `导入文件不能超过 ${MEDIA_IMPORT_MAX_ROWS} 行，请拆分后再导入。`,
+      );
+      expect(sheetToJson).not.toHaveBeenCalled();
+    } finally {
+      sheetToJson.mockRestore();
+    }
   });
 
   it("throws a clear error when the import has too many columns", () => {
