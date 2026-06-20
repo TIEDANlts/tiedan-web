@@ -11,7 +11,7 @@ function clientKey(request: NextRequest) {
     );
   }
 
-  return request.headers.get("x-real-ip") || "unknown";
+  return "unknown";
 }
 
 export async function POST(request: NextRequest) {

@@ -39,4 +39,17 @@ describe("recordPostView", () => {
     await expect(first).resolves.toEqual({ counted: true });
     expect(updatePost).toHaveBeenCalledTimes(1);
   });
+
+  it("does not let a late rollback clear a newer committed reservation", async () => {
+    const firstUpdate = Promise.withResolvers<{ count: number }>();
+    updatePost.mockReturnValueOnce(firstUpdate.promise as never).mockResolvedValueOnce({ count: 1 });
+
+    const first = recordPostView("late", "client-late", 10_000);
+    await expect(recordPostView("late", "client-late", 610_001)).resolves.toEqual({ counted: true });
+
+    firstUpdate.resolve({ count: 0 });
+    await expect(first).resolves.toEqual({ counted: false });
+    await expect(recordPostView("late", "client-late", 610_002)).resolves.toEqual({ counted: false });
+    expect(updatePost).toHaveBeenCalledTimes(2);
+  });
 });

@@ -26,7 +26,21 @@ describe("POST /api/posts/view", () => {
       }),
     } as never);
 
-    expect(mocks.recordPostView).toHaveBeenCalledWith("hello", "203.0.113.20");
+    expect(mocks.recordPostView).toHaveBeenCalledWith("hello", "unknown");
+  });
+
+  it("does not trust spoofed X-Real-IP by default", async () => {
+    const { POST } = await import("./route");
+    mocks.recordPostView.mockResolvedValue({ counted: true });
+
+    await POST({
+      json: async () => ({ slug: "hello" }),
+      headers: new Headers({
+        "x-real-ip": "203.0.113.20",
+      }),
+    } as never);
+
+    expect(mocks.recordPostView).toHaveBeenCalledWith("hello", "unknown");
   });
 
   it("uses X-Forwarded-For only when proxy headers are explicitly trusted", async () => {

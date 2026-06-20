@@ -3,11 +3,16 @@ import { buildViewKey } from "@/modules/posts/utils";
 
 const VIEW_DEBOUNCE_MS = 10 * 60 * 1000;
 
-const globalForViews = globalThis as unknown as {
-  postViewDebounce?: Map<string, number>;
+type ViewDebounceEntry = {
+  at: number;
+  token: symbol;
 };
 
-const viewDebounce = globalForViews.postViewDebounce ?? new Map<string, number>();
+const globalForViews = globalThis as unknown as {
+  postViewDebounce?: Map<string, ViewDebounceEntry>;
+};
+
+const viewDebounce = globalForViews.postViewDebounce ?? new Map<string, ViewDebounceEntry>();
 
 if (process.env.NODE_ENV !== "production") {
   globalForViews.postViewDebounce = viewDebounce;
@@ -24,8 +29,8 @@ function sweepExpired(now: number) {
 
   lastSweepAt = now;
 
-  for (const [key, lastSeenAt] of viewDebounce) {
-    if (now - lastSeenAt >= VIEW_DEBOUNCE_MS) {
+  for (const [key, lastSeen] of viewDebounce) {
+    if (now - lastSeen.at >= VIEW_DEBOUNCE_MS) {
       viewDebounce.delete(key);
     }
   }
@@ -35,22 +40,27 @@ export function shouldCountView(ip: string, slug: string, now = Date.now()) {
   sweepExpired(now);
 
   const key = buildViewKey(ip, slug);
-  const lastSeenAt = viewDebounce.get(key);
+  const lastSeen = viewDebounce.get(key);
 
-  return lastSeenAt === undefined || now - lastSeenAt >= VIEW_DEBOUNCE_MS;
+  return lastSeen === undefined || now - lastSeen.at >= VIEW_DEBOUNCE_MS;
 }
 
 export function commitCountedView(ip: string, slug: string, now = Date.now()) {
-  viewDebounce.set(buildViewKey(ip, slug), now);
+  viewDebounce.set(buildViewKey(ip, slug), { at: now, token: Symbol("post-view-committed") });
 }
 
 export function reserveCountedView(ip: string, slug: string, now = Date.now()) {
   const key = buildViewKey(ip, slug);
   const previous = viewDebounce.get(key);
+  const token = Symbol("post-view-reservation");
 
-  viewDebounce.set(key, now);
+  viewDebounce.set(key, { at: now, token });
 
   return () => {
+    if (viewDebounce.get(key)?.token !== token) {
+      return;
+    }
+
     if (previous === undefined) {
       viewDebounce.delete(key);
       return;
