@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   derivePrivateThumbUrl,
   enumerateTripDates,
+  isValidTripCoordinate,
   normalizeTripInput,
   planTripDaySync,
   parseTripLocations,
@@ -166,6 +167,13 @@ describe("readTripFormData", () => {
 });
 
 describe("parseTripLocations", () => {
+  it("validates latitude and longitude ranges", () => {
+    expect(isValidTripCoordinate(90, 180)).toBe(true);
+    expect(isValidTripCoordinate(-90, -180)).toBe(true);
+    expect(isValidTripCoordinate(90.000001, 0)).toBe(false);
+    expect(isValidTripCoordinate(0, 180.000001)).toBe(false);
+  });
+
   it("normalizes persisted location JSON", () => {
     expect(parseTripLocations([{ name: "西湖", lat: 30.25, lng: 120.14 }])).toEqual([
       expect.objectContaining({ name: "西湖", lat: 30.25, lng: 120.14 }),
@@ -174,6 +182,7 @@ describe("parseTripLocations", () => {
 
   it("drops invalid coordinates", () => {
     expect(parseTripLocations([{ name: "坏坐标", lat: "x", lng: 120 }])).toEqual([]);
+    expect(parseTripLocations([{ name: "坏坐标", lat: 999, lng: 999 }])).toEqual([]);
   });
 });
 

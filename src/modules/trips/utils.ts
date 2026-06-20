@@ -218,7 +218,7 @@ export function parseTripLocations(value: unknown): TripLocation[] {
     const lat = Number(raw.lat);
     const lng = Number(raw.lng);
 
-    if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    if (!name || !isValidTripCoordinate(lat, lng)) {
       return [];
     }
 
@@ -229,6 +229,10 @@ export function parseTripLocations(value: unknown): TripLocation[] {
       lng,
     }];
   });
+}
+
+export function isValidTripCoordinate(lat: number, lng: number) {
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 }
 
 export function derivePrivateThumbUrl(url: string) {

@@ -209,15 +209,29 @@ model Trip {
 }
 
 model TripDay {
-  id        String   @id @default(cuid())
-  tripId    String
-  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  date      DateTime @db.Date
-  noteMd    String?  @db.Text
-  locations Json     @default("[]")
-  photos    String[]
+  id            String         @id @default(cuid())
+  tripId        String
+  trip          Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  date          DateTime       @db.Date
+  noteMd        String?        @db.Text
+  locations     Json           @default("[]")
+  locationItems TripLocation[]
+  photos        String[]
 
   @@unique([tripId, date])
+}
+
+model TripLocation {
+  id        String   @id @default(cuid())
+  dayId     String
+  day       TripDay  @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  name      String
+  lat       Decimal  @db.Decimal(9, 6)
+  lng       Decimal  @db.Decimal(9, 6)
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([dayId])
 }
 
 model Activity {

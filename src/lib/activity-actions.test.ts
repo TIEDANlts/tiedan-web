@@ -4,7 +4,7 @@ import { executeExpenseImportAction } from "../modules/expenses/actions";
 import { updateGameAction } from "../modules/games/actions";
 import { advanceMediaStatusAction } from "../modules/media/actions";
 import { savePostAction } from "../modules/posts/actions";
-import { updateTripOverviewAction } from "../modules/trips/actions";
+import { addTripLocationAction, removeTripLocationAction, updateTripOverviewAction } from "../modules/trips/actions";
 
 const mocks = vi.hoisted(() => {
   const tx = {
@@ -48,7 +48,14 @@ const mocks = vi.hoisted(() => {
         update: vi.fn(),
       },
       tripDay: {
+        findUnique: vi.fn(),
+        update: vi.fn(),
         createMany: vi.fn(),
+        deleteMany: vi.fn(),
+      },
+      tripLocation: {
+        aggregate: vi.fn(),
+        create: vi.fn(),
         deleteMany: vi.fn(),
       },
       transaction: {
@@ -321,6 +328,48 @@ describe("activity recording in server actions", () => {
       data: [{ tripId: "trip-1", date: new Date("2026-06-04T00:00:00.000Z") }],
       skipDuplicates: true,
     });
+  });
+
+  it("adds trip locations as rows instead of rewriting the day JSON array", async () => {
+    mocks.db.tripDay.findUnique.mockResolvedValueOnce({ tripId: "trip-1" });
+    mocks.db.tripLocation.aggregate.mockResolvedValueOnce({ _max: { sort: 2 } });
+    mocks.db.tripLocation.create.mockResolvedValueOnce({});
+
+    const result = await addTripLocationAction({
+      dayId: "day-1",
+      name: "西湖",
+      lat: 30.25,
+      lng: 120.14,
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(mocks.db.tripDay.findUnique).toHaveBeenCalledWith({
+      where: { id: "day-1" },
+      select: { tripId: true },
+    });
+    expect(mocks.db.tripLocation.create).toHaveBeenCalledWith({
+      data: {
+        dayId: "day-1",
+        name: "西湖",
+        lat: "30.250000",
+        lng: "120.140000",
+        sort: 3,
+      },
+    });
+    expect(mocks.db.tripDay.update).not.toHaveBeenCalled();
+  });
+
+  it("removes trip locations by row id without rewriting the day JSON array", async () => {
+    mocks.db.tripDay.findUnique.mockResolvedValueOnce({ tripId: "trip-1" });
+    mocks.db.tripLocation.deleteMany.mockResolvedValueOnce({ count: 1 });
+
+    const result = await removeTripLocationAction("day-1", "location-1");
+
+    expect(result).toMatchObject({ ok: true });
+    expect(mocks.db.tripLocation.deleteMany).toHaveBeenCalledWith({
+      where: { id: "location-1", dayId: "day-1" },
+    });
+    expect(mocks.db.tripDay.update).not.toHaveBeenCalled();
   });
 
   it("records an expense import activity only when new rows are inserted", async () => {
