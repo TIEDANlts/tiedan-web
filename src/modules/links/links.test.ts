@@ -127,4 +127,13 @@ describe("reorderLinksWithinGroup", () => {
       ], "工具", ["a", "b", "c"]),
     ).toThrow("排序列表包含其他分组的链接");
   });
+
+  it("rejects unknown ids", () => {
+    expect(() =>
+      reorderLinksWithinGroup([
+        { id: "a", group: "工具", sort: 0 },
+        { id: "b", group: "工具", sort: 1 },
+      ], "工具", ["a", "unknown"]),
+    ).toThrow("排序列表包含其他分组的链接");
+  });
 });

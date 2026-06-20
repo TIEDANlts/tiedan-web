@@ -39,7 +39,8 @@ vi.mock("@/modules/expenses/parsers", () => ({
   parseExpenseImportFile: vi.fn(),
 }));
 
-import { buildCompleteSortUpdates, reorderExpenseCategoriesAction } from "./actions";
+import { reorderExpenseCategoriesAction } from "./actions";
+import { buildCompleteSortUpdates } from "./utils";
 
 describe("buildCompleteSortUpdates", () => {
   it("builds stepped sort updates for a complete ordered id set", () => {

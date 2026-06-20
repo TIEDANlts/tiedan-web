@@ -16,6 +16,7 @@ import { categorizeExpenseTransaction } from "@/modules/expenses/categorize";
 import { getExpenseCategoriesForCategorize, getExpenseCategoryOptions } from "@/modules/expenses/category-options";
 import type { ExpenseActionState } from "@/modules/expenses/action-state";
 import {
+  buildCompleteSortUpdates,
   readExpenseCategoryFormData,
   readManualTransactionFormData,
 } from "@/modules/expenses/utils";
@@ -42,24 +43,6 @@ async function nextCategorySort() {
   });
 
   return (aggregate._max.sort ?? 0) + 10;
-}
-
-export function buildCompleteSortUpdates(currentIds: string[], orderedIds: string[], step = 10) {
-  const currentIdSet = new Set(currentIds);
-  const orderedIdSet = new Set(orderedIds);
-
-  if (
-    orderedIdSet.size !== orderedIds.length ||
-    orderedIdSet.size !== currentIdSet.size ||
-    orderedIds.some((id) => !currentIdSet.has(id))
-  ) {
-    return null;
-  }
-
-  return orderedIds.map((id, index) => ({
-    id,
-    sort: (index + 1) * step,
-  }));
 }
 
 export async function createManualTransactionAction(
