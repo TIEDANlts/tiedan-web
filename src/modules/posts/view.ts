@@ -56,17 +56,24 @@ export function reserveCountedView(ip: string, slug: string, now = Date.now()) {
 
   viewDebounce.set(key, { at: now, token });
 
-  return () => {
-    if (viewDebounce.get(key)?.token !== token) {
-      return;
-    }
+  return {
+    commit() {
+      if (viewDebounce.get(key)?.token === token) {
+        viewDebounce.set(key, { at: now, token: Symbol("post-view-committed") });
+      }
+    },
+    rollback() {
+      if (viewDebounce.get(key)?.token !== token) {
+        return;
+      }
 
-    if (previous === undefined) {
-      viewDebounce.delete(key);
-      return;
-    }
+      if (previous === undefined) {
+        viewDebounce.delete(key);
+        return;
+      }
 
-    viewDebounce.set(key, previous);
+      viewDebounce.set(key, previous);
+    },
   };
 }
 
@@ -80,7 +87,7 @@ export async function recordPostView(slug: string, ip: string, now = Date.now())
     return { counted: false };
   }
 
-  const rollbackReservation = reserveCountedView(ip, slug, now);
+  const reservation = reserveCountedView(ip, slug, now);
 
   try {
     const updated = await db.post.updateMany({
@@ -96,14 +103,14 @@ export async function recordPostView(slug: string, ip: string, now = Date.now())
     });
 
     if (updated.count === 0) {
-      rollbackReservation();
+      reservation.rollback();
       return { counted: false };
     }
 
-    commitCountedView(ip, slug, now);
+    reservation.commit();
     return { counted: true };
   } catch (error) {
-    rollbackReservation();
+    reservation.rollback();
     throw error;
   }
 }

@@ -15,7 +15,7 @@ const updatePost = vi.mocked(db.post.updateMany);
 
 describe("recordPostView", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    updatePost.mockReset();
     resetPostViewDebounceForTest();
   });
 
@@ -25,6 +25,21 @@ describe("recordPostView", () => {
     await expect(recordPostView("missing-post", "client-task9", 1_000)).resolves.toEqual({ counted: false });
     await expect(recordPostView("missing-post", "client-task9", 2_000)).resolves.toEqual({ counted: true });
 
+    expect(updatePost).toHaveBeenCalledTimes(2);
+  });
+
+  it("only counts published posts so drafts do not consume debounce", async () => {
+    updatePost.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+
+    await expect(recordPostView("draft-post", "client-draft", 3_000)).resolves.toEqual({ counted: false });
+    await expect(recordPostView("draft-post", "client-draft", 4_000)).resolves.toEqual({ counted: true });
+
+    expect(updatePost).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      where: {
+        slug: "draft-post",
+        status: "PUBLISHED",
+      },
+    }));
     expect(updatePost).toHaveBeenCalledTimes(2);
   });
 
@@ -50,6 +65,19 @@ describe("recordPostView", () => {
     firstUpdate.resolve({ count: 0 });
     await expect(first).resolves.toEqual({ counted: false });
     await expect(recordPostView("late", "client-late", 610_002)).resolves.toEqual({ counted: false });
+    expect(updatePost).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not let a late success overwrite a newer committed reservation", async () => {
+    const firstUpdate = Promise.withResolvers<{ count: number }>();
+    updatePost.mockReturnValueOnce(firstUpdate.promise as never).mockResolvedValueOnce({ count: 1 });
+
+    const first = recordPostView("late-success", "client-late-success", 10_000);
+    await expect(recordPostView("late-success", "client-late-success", 610_001)).resolves.toEqual({ counted: true });
+
+    firstUpdate.resolve({ count: 1 });
+    await expect(first).resolves.toEqual({ counted: true });
+    await expect(recordPostView("late-success", "client-late-success", 610_002)).resolves.toEqual({ counted: false });
     expect(updatePost).toHaveBeenCalledTimes(2);
   });
 });
