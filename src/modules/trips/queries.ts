@@ -144,7 +144,7 @@ function serializeDay(day: {
   photos: string[];
 }): TripDayItem {
   const locations: SerializedLocation[] =
-    day.locationItems && day.locationItems.length > 0
+    Array.isArray(day.locationItems)
       ? day.locationItems.map((location) => ({
           id: location.id,
           name: location.name,
