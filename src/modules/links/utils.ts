@@ -128,11 +128,22 @@ export function reorderLinksWithinGroup(
   orderedIds: string[],
 ) {
   const groupIds = new Set(links.filter((link) => link.group === group).map((link) => link.id));
+  const orderedIdSet = new Set(orderedIds);
 
-  return orderedIds
-    .filter((id) => groupIds.has(id))
-    .map((id, index) => ({
-      id,
-      sort: index,
-    }));
+  if (orderedIdSet.size !== orderedIds.length) {
+    throw new Error("排序列表包含重复项");
+  }
+
+  if (orderedIds.some((id) => !groupIds.has(id))) {
+    throw new Error("排序列表包含其他分组的链接");
+  }
+
+  if (orderedIdSet.size !== groupIds.size) {
+    throw new Error("排序列表不完整");
+  }
+
+  return orderedIds.map((id, index) => ({
+    id,
+    sort: index,
+  }));
 }

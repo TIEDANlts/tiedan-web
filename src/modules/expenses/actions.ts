@@ -44,6 +44,24 @@ async function nextCategorySort() {
   return (aggregate._max.sort ?? 0) + 10;
 }
 
+function buildCompleteSortUpdates(currentIds: string[], orderedIds: string[], step = 10) {
+  const currentIdSet = new Set(currentIds);
+  const orderedIdSet = new Set(orderedIds);
+
+  if (
+    orderedIdSet.size !== orderedIds.length ||
+    orderedIdSet.size !== currentIdSet.size ||
+    orderedIds.some((id) => !currentIdSet.has(id))
+  ) {
+    return null;
+  }
+
+  return orderedIds.map((id, index) => ({
+    id,
+    sort: (index + 1) * step,
+  }));
+}
+
 export async function createManualTransactionAction(
   _previousState: ExpenseActionState,
   formData: FormData,
@@ -256,18 +274,23 @@ export async function reorderExpenseCategoriesAction(orderedIds: string[]) {
   const categories = await db.expenseCategory.findMany({
     select: { id: true },
   });
-  const knownIds = new Set(categories.map((category) => category.id));
-  const updates = orderedIds
-    .filter((id) => knownIds.has(id))
-    .map((id, index) =>
-      db.expenseCategory.update({
-        where: { id },
-        data: { sort: (index + 1) * 10 },
-      }),
-    );
+  const updates = buildCompleteSortUpdates(categories.map((category) => category.id), orderedIds);
 
-  await db.$transaction(updates);
+  if (!updates) {
+    return { ok: false, message: "分类排序已过期，请刷新后重试。" };
+  }
+
+  await db.$transaction(
+    updates.map((update) =>
+      db.expenseCategory.update({
+        where: { id: update.id },
+        data: { sort: update.sort },
+      }),
+    ),
+  );
   revalidateExpenses();
+
+  return { ok: true, message: "分类排序已更新。" };
 }
 
 export type ExpenseImportParseState =
