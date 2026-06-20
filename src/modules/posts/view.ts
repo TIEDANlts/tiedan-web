@@ -35,18 +35,17 @@ export function shouldCountView(ip: string, slug: string, now = Date.now()) {
   sweepExpired(now);
 
   const key = buildViewKey(ip, slug);
-  const lastSeenAt = viewDebounce.get(key) ?? 0;
+  const lastSeenAt = viewDebounce.get(key);
 
-  if (now - lastSeenAt < VIEW_DEBOUNCE_MS) {
-    return false;
-  }
-
-  viewDebounce.set(key, now);
-  return true;
+  return lastSeenAt === undefined || now - lastSeenAt >= VIEW_DEBOUNCE_MS;
 }
 
-export async function recordPostView(slug: string, ip: string) {
-  if (!shouldCountView(ip, slug)) {
+export function commitCountedView(ip: string, slug: string, now = Date.now()) {
+  viewDebounce.set(buildViewKey(ip, slug), now);
+}
+
+export async function recordPostView(slug: string, ip: string, now = Date.now()) {
+  if (!shouldCountView(ip, slug, now)) {
     return { counted: false };
   }
 
@@ -61,6 +60,10 @@ export async function recordPostView(slug: string, ip: string) {
       },
     },
   });
+
+  if (updated.count > 0) {
+    commitCountedView(ip, slug, now);
+  }
 
   return { counted: updated.count > 0 };
 }
