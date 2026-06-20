@@ -44,26 +44,56 @@ export function commitCountedView(ip: string, slug: string, now = Date.now()) {
   viewDebounce.set(buildViewKey(ip, slug), now);
 }
 
+export function reserveCountedView(ip: string, slug: string, now = Date.now()) {
+  const key = buildViewKey(ip, slug);
+  const previous = viewDebounce.get(key);
+
+  viewDebounce.set(key, now);
+
+  return () => {
+    if (previous === undefined) {
+      viewDebounce.delete(key);
+      return;
+    }
+
+    viewDebounce.set(key, previous);
+  };
+}
+
+export function resetPostViewDebounceForTest() {
+  viewDebounce.clear();
+  lastSweepAt = 0;
+}
+
 export async function recordPostView(slug: string, ip: string, now = Date.now()) {
   if (!shouldCountView(ip, slug, now)) {
     return { counted: false };
   }
 
-  const updated = await db.post.updateMany({
-    where: {
-      slug,
-      status: "PUBLISHED",
-    },
-    data: {
-      views: {
-        increment: 1,
+  const rollbackReservation = reserveCountedView(ip, slug, now);
+
+  try {
+    const updated = await db.post.updateMany({
+      where: {
+        slug,
+        status: "PUBLISHED",
       },
-    },
-  });
+      data: {
+        views: {
+          increment: 1,
+        },
+      },
+    });
 
-  if (updated.count > 0) {
+    if (updated.count === 0) {
+      rollbackReservation();
+      return { counted: false };
+    }
+
     commitCountedView(ip, slug, now);
+    return { counted: true };
+  } catch (error) {
+    rollbackReservation();
+    throw error;
   }
-
-  return { counted: updated.count > 0 };
 }
