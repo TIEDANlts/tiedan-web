@@ -4,9 +4,9 @@ import { AuthError } from "next-auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
-import { loginRateLimiter } from "@/lib/auth/rate-limit";
+import { loginRateKey, loginRateLimiter } from "@/lib/auth/rate-limit";
 import { safeFromPath } from "@/lib/auth/routes";
-import { loginErrorMessage, shouldRecordLoginFailure } from "./errors";
+import { loginErrorMessage } from "./errors";
 
 export type LoginState = {
   error: string | null;
@@ -25,17 +25,17 @@ export async function loginAction(
 ): Promise<LoginState> {
   const headersList = await headers();
   const ip = getClientIp(headersList);
-  const lock = loginRateLimiter.getLock(ip);
+  const username = String(formData.get("username") ?? "");
+  const password = String(formData.get("password") ?? "");
+  const from = safeFromPath(String(formData.get("from") ?? "/"));
+  const rateKey = loginRateKey(ip, username);
+  const lock = loginRateLimiter.getLock(rateKey);
 
   if (lock) {
     return {
       error: `尝试次数太多，请 ${Math.ceil(lock.retryAfterSeconds / 60)} 分钟后再试。`,
     };
   }
-
-  const username = String(formData.get("username") ?? "");
-  const password = String(formData.get("password") ?? "");
-  const from = safeFromPath(String(formData.get("from") ?? "/"));
 
   try {
     await signIn("credentials", {
@@ -45,16 +45,12 @@ export async function loginAction(
     });
   } catch (error) {
     if (error instanceof AuthError) {
-      if (shouldRecordLoginFailure(error)) {
-        loginRateLimiter.recordFailure(ip);
-      }
-
       return { error: loginErrorMessage(error) };
     }
 
     throw error;
   }
 
-  loginRateLimiter.clear(ip);
+  loginRateLimiter.clear(rateKey);
   redirect(from);
 }

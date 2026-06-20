@@ -55,11 +55,26 @@ function outboundDispatcher(): Dispatcher {
   }
 
   if (cachedProxyUrl !== proxyUrl) {
+    const proxyDispatcher = new ProxyAgent(proxyUrl);
     cachedProxyUrl = proxyUrl;
-    cachedProxyDispatcher = new ProxyAgent(proxyUrl);
+    cachedProxyDispatcher = proxyDispatcher;
   }
 
   return cachedProxyDispatcher as Dispatcher;
+}
+
+function assertProxyGuardConfiguration() {
+  const proxyUrl = process.env.OUTBOUND_PROXY?.trim();
+  if (!proxyUrl) {
+    return;
+  }
+
+  if (process.env.OUTBOUND_PROXY_TRUSTS_PRIVATE_GUARD !== "1") {
+    throw new OutboundFetchError(
+      "OUTBOUND_PROXY 会绕过本进程 DNS 私网校验；请使用可信代理并显式设置 OUTBOUND_PROXY_TRUSTS_PRIVATE_GUARD=1。",
+      "SSRF_BLOCKED",
+    );
+  }
 }
 
 function timeoutSignal(signal: AbortSignal | null | undefined, timeoutMs: number) {
@@ -111,6 +126,7 @@ export async function fetchWithRetry(url: string | URL, options: OutboundFetchOp
   } catch (error) {
     throw toOutboundFetchError(error);
   }
+  assertProxyGuardConfiguration();
 
   const attempts = Math.max(1, retries + 1);
   let lastError: unknown;

@@ -1,0 +1,83 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { db } from "@/lib/db";
+import { recordPostView, resetPostViewDebounceForTest } from "./view";
+
+vi.mock("@/lib/db", () => ({
+  db: {
+    post: {
+      updateMany: vi.fn(),
+    },
+  },
+}));
+
+const updatePost = vi.mocked(db.post.updateMany);
+
+describe("recordPostView", () => {
+  beforeEach(() => {
+    updatePost.mockReset();
+    resetPostViewDebounceForTest();
+  });
+
+  it("does not consume debounce when the slug is not updated", async () => {
+    updatePost.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+
+    await expect(recordPostView("missing-post", "client-task9", 1_000)).resolves.toEqual({ counted: false });
+    await expect(recordPostView("missing-post", "client-task9", 2_000)).resolves.toEqual({ counted: true });
+
+    expect(updatePost).toHaveBeenCalledTimes(2);
+  });
+
+  it("only counts published posts so drafts do not consume debounce", async () => {
+    updatePost.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+
+    await expect(recordPostView("draft-post", "client-draft", 3_000)).resolves.toEqual({ counted: false });
+    await expect(recordPostView("draft-post", "client-draft", 4_000)).resolves.toEqual({ counted: true });
+
+    expect(updatePost).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      where: {
+        slug: "draft-post",
+        status: "PUBLISHED",
+      },
+    }));
+    expect(updatePost).toHaveBeenCalledTimes(2);
+  });
+
+  it("reserves the debounce key while a count update is in flight", async () => {
+    const firstUpdate = Promise.withResolvers<{ count: number }>();
+    updatePost.mockReturnValueOnce(firstUpdate.promise as never);
+
+    const first = recordPostView("hello", "client-concurrent", 10_000);
+    await expect(recordPostView("hello", "client-concurrent", 10_001)).resolves.toEqual({ counted: false });
+
+    firstUpdate.resolve({ count: 1 });
+    await expect(first).resolves.toEqual({ counted: true });
+    expect(updatePost).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let a late rollback clear a newer committed reservation", async () => {
+    const firstUpdate = Promise.withResolvers<{ count: number }>();
+    updatePost.mockReturnValueOnce(firstUpdate.promise as never).mockResolvedValueOnce({ count: 1 });
+
+    const first = recordPostView("late", "client-late", 10_000);
+    await expect(recordPostView("late", "client-late", 610_001)).resolves.toEqual({ counted: true });
+
+    firstUpdate.resolve({ count: 0 });
+    await expect(first).resolves.toEqual({ counted: false });
+    await expect(recordPostView("late", "client-late", 610_002)).resolves.toEqual({ counted: false });
+    expect(updatePost).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not let a late success overwrite a newer committed reservation", async () => {
+    const firstUpdate = Promise.withResolvers<{ count: number }>();
+    updatePost.mockReturnValueOnce(firstUpdate.promise as never).mockResolvedValueOnce({ count: 1 });
+
+    const first = recordPostView("late-success", "client-late-success", 10_000);
+    await expect(recordPostView("late-success", "client-late-success", 610_001)).resolves.toEqual({ counted: true });
+
+    firstUpdate.resolve({ count: 1 });
+    await expect(first).resolves.toEqual({ counted: true });
+    await expect(recordPostView("late-success", "client-late-success", 610_002)).resolves.toEqual({ counted: false });
+    expect(updatePost).toHaveBeenCalledTimes(2);
+  });
+});

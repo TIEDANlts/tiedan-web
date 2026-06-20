@@ -303,6 +303,24 @@ export function groupTransactionsByDate<T extends TransactionForGrouping>(items:
   return Array.from(groups.values()).sort((a, b) => b.date.localeCompare(a.date));
 }
 
+export function buildCompleteSortUpdates(currentIds: string[], orderedIds: string[], step = 10) {
+  const currentIdSet = new Set(currentIds);
+  const orderedIdSet = new Set(orderedIds);
+
+  if (
+    orderedIdSet.size !== orderedIds.length ||
+    orderedIdSet.size !== currentIdSet.size ||
+    orderedIds.some((id) => !currentIdSet.has(id))
+  ) {
+    return null;
+  }
+
+  return orderedIds.map((id, index) => ({
+    id,
+    sort: (index + 1) * step,
+  }));
+}
+
 export function transactionDisplayText(item: string | null, note: string | null) {
   return item || note || "手动记账";
 }

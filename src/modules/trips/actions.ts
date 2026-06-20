@@ -12,10 +12,9 @@ import type { TripActionState } from "@/modules/trips/action-state";
 import {
   dateFromInput,
   enumerateTripDates,
+  isValidTripCoordinate,
   planTripDaySync,
-  parseTripLocations,
   readTripFormData,
-  type TripLocation,
 } from "@/modules/trips/utils";
 
 async function requireTripSession() {
@@ -171,7 +170,7 @@ export async function addTripLocationAction(input: {
 
   const day = await db.tripDay.findUnique({
     where: { id: input.dayId },
-    select: { tripId: true, locations: true },
+    select: { tripId: true },
   });
   if (!day) {
     return { ok: false, message: "这一天不存在。" };
@@ -180,24 +179,30 @@ export async function addTripLocationAction(input: {
   const name = input.name.trim();
   const sourceLat = Number(input.lat);
   const sourceLng = Number(input.lng);
-  if (!name || !Number.isFinite(sourceLat) || !Number.isFinite(sourceLng)) {
+  if (!name || !isValidTripCoordinate(sourceLat, sourceLng)) {
     return { ok: false, message: "请填写地点名称和有效坐标。" };
   }
 
   const converted = input.fromGcj02 ? gcj02ToWgs84(sourceLat, sourceLng) : { lat: sourceLat, lng: sourceLng };
-  const locations: TripLocation[] = [
-    ...parseTripLocations(day.locations),
-    {
-      id: randomUUID(),
-      name,
-      lat: Number(converted.lat.toFixed(6)),
-      lng: Number(converted.lng.toFixed(6)),
-    },
-  ];
+  const lat = Number(converted.lat.toFixed(6));
+  const lng = Number(converted.lng.toFixed(6));
+  if (!isValidTripCoordinate(lat, lng)) {
+    return { ok: false, message: "请填写地点名称和有效坐标。" };
+  }
 
-  await db.tripDay.update({
-    where: { id: input.dayId },
-    data: { locations },
+  const maxSort = await db.tripLocation.aggregate({
+    where: { dayId: input.dayId },
+    _max: { sort: true },
+  });
+
+  await db.tripLocation.create({
+    data: {
+      dayId: input.dayId,
+      name,
+      lat: lat.toFixed(6),
+      lng: lng.toFixed(6),
+      sort: (maxSort._max.sort ?? -1) + 1,
+    },
   });
 
   revalidateTrips(day.tripId);
@@ -210,17 +215,14 @@ export async function removeTripLocationAction(dayId: string, locationId: string
 
   const day = await db.tripDay.findUnique({
     where: { id: dayId },
-    select: { tripId: true, locations: true },
+    select: { tripId: true },
   });
   if (!day) {
     return { ok: false, message: "这一天不存在。" };
   }
 
-  await db.tripDay.update({
-    where: { id: dayId },
-    data: {
-      locations: parseTripLocations(day.locations).filter((location) => location.id !== locationId),
-    },
+  await db.tripLocation.deleteMany({
+    where: { id: locationId, dayId },
   });
 
   revalidateTrips(day.tripId);

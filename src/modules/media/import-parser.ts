@@ -2,6 +2,7 @@ import { TextDecoder } from "node:util";
 import iconv from "iconv-lite";
 import * as XLSX from "xlsx";
 
+import { parseStrictShanghaiDate } from "../../lib/dayjs";
 import {
   isMediaStatus,
   isMediaType,
@@ -51,6 +52,18 @@ export type ParsedMediaImportFile = {
   encoding: MediaImportEncoding | null;
 };
 
+export const MEDIA_IMPORT_MAX_ROWS = 20000;
+export const MEDIA_IMPORT_MAX_COLUMNS = 100;
+
+type SheetToJsonOptionsWithLimit = XLSX.Sheet2JSONOpts & { sheetRows: number };
+
+export class MediaImportLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MediaImportLimitError";
+  }
+}
+
 const headerKeywords: Record<keyof MediaImportMapping, string[]> = {
   title: ["书影音名", "标题", "名称", "片名", "书名", "title", "name"],
   type: ["类型", "类别", "分类", "type", "category"],
@@ -73,6 +86,16 @@ function compactRows(sheetRows: unknown[][]) {
   const rows = sheetRows
     .map((row) => row.map(trimCell))
     .filter((row) => row.some(Boolean));
+  const maxColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
+
+  if (rows.length > MEDIA_IMPORT_MAX_ROWS) {
+    throw new MediaImportLimitError(`导入文件不能超过 ${MEDIA_IMPORT_MAX_ROWS} 行，请拆分后再导入。`);
+  }
+
+  if (maxColumns > MEDIA_IMPORT_MAX_COLUMNS) {
+    throw new MediaImportLimitError(`导入文件不能超过 ${MEDIA_IMPORT_MAX_COLUMNS} 列，请删减后再导入。`);
+  }
+
   const headers = rows[0] ?? [];
 
   return {
@@ -81,6 +104,33 @@ function compactRows(sheetRows: unknown[][]) {
       Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""])),
     ),
   };
+}
+
+function sheetDimensions(sheet: XLSX.WorkSheet) {
+  const ref = sheet["!ref"];
+
+  if (!ref) {
+    return { rows: 0, columns: 0 };
+  }
+
+  const range = XLSX.utils.decode_range(ref);
+
+  return {
+    rows: range.e.r - range.s.r + 1,
+    columns: range.e.c - range.s.c + 1,
+  };
+}
+
+function assertSheetWithinLimits(sheet: XLSX.WorkSheet) {
+  const dimensions = sheetDimensions(sheet);
+
+  if (dimensions.rows > MEDIA_IMPORT_MAX_ROWS) {
+    throw new MediaImportLimitError(`导入文件不能超过 ${MEDIA_IMPORT_MAX_ROWS} 行，请拆分后再导入。`);
+  }
+
+  if (dimensions.columns > MEDIA_IMPORT_MAX_COLUMNS) {
+    throw new MediaImportLimitError(`导入文件不能超过 ${MEDIA_IMPORT_MAX_COLUMNS} 列，请删减后再导入。`);
+  }
 }
 
 function parseWorkbook(bufferOrText: Buffer | string, type: "buffer" | "string") {
@@ -92,12 +142,18 @@ function parseWorkbook(bufferOrText: Buffer | string, type: "buffer" | "string")
     return { headers: [], rows: [] };
   }
 
+  assertSheetWithinLimits(firstSheet);
+
   return compactRows(
-    XLSX.utils.sheet_to_json<unknown[]>(firstSheet, {
-      header: 1,
-      defval: "",
-      raw: false,
-    }),
+    XLSX.utils.sheet_to_json<unknown[]>(
+      firstSheet,
+      {
+        header: 1,
+        defval: "",
+        raw: false,
+        sheetRows: MEDIA_IMPORT_MAX_ROWS + 1,
+      } as SheetToJsonOptionsWithLimit,
+    ),
   );
 }
 
@@ -251,16 +307,27 @@ function normalizeRating(rawRating: string) {
   return null;
 }
 
-function normalizeDateText(rawDate: string) {
+function normalizeDateText(rawDate: string): { value: string | null } | { error: string } {
   const value = rawDate.trim();
+
+  if (!value) {
+    return { value: null };
+  }
+
   const match = value.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
 
   if (!match) {
-    return null;
+    return { error: "标记日期格式不正确。" };
   }
 
   const [, year, month, day] = match;
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  const normalized = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+
+  if (!parseStrictShanghaiDate(normalized)) {
+    return { error: "标记日期格式不正确。" };
+  }
+
+  return { value: normalized };
 }
 
 function normalizeYear(rawYear: string) {
@@ -275,10 +342,15 @@ export function normalizeMediaImportRow(
   defaults: MediaImportDefaults,
 ): NormalizedMediaImportRow {
   const title = readMapped(row, mapping.title);
+  const markedAt = normalizeDateText(readMapped(row, mapping.markedAt));
   const errors: string[] = [];
 
   if (!title) {
     errors.push("标题为空。");
+  }
+
+  if ("error" in markedAt) {
+    errors.push(markedAt.error);
   }
 
   if (errors.length > 0) {
@@ -286,6 +358,7 @@ export function normalizeMediaImportRow(
   }
 
   const link = readMapped(row, mapping.link);
+  const markedAtValue = "value" in markedAt ? markedAt.value : null;
 
   return {
     ok: true,
@@ -295,7 +368,7 @@ export function normalizeMediaImportRow(
       status: normalizeImportStatus(readMapped(row, mapping.status), defaults.defaultStatus, defaults.statusValueMap),
       rating: normalizeRating(readMapped(row, mapping.rating)),
       reviewMd: readMapped(row, mapping.review) || null,
-      markedAt: normalizeDateText(readMapped(row, mapping.markedAt)),
+      markedAt: markedAtValue,
       doubanId: extractDoubanId(link),
       year: normalizeYear(readMapped(row, mapping.year)),
       coverUrl: readMapped(row, mapping.coverUrl) || null,

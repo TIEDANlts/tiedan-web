@@ -19,6 +19,13 @@ describe("parseQuickExpenseText", () => {
     expect(parseQuickExpenseText("咖啡 -1")).toMatchObject({ ok: false });
     expect(parseQuickExpenseText("咖啡 1.234")).toMatchObject({ ok: false });
   });
+
+  it("rejects amounts beyond Decimal(12,2)", () => {
+    expect(parseQuickExpenseText("咖啡 10000000000.00")).toEqual({
+      ok: false,
+      error: "金额不能超过 9,999,999,999.99。",
+    });
+  });
 });
 
 describe("QuickExpenseRateLimiter", () => {

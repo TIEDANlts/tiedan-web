@@ -142,7 +142,13 @@ export async function reorderLinksAction(group: string, orderedIds: string[]) {
     where: { group },
     select: { id: true, group: true, sort: true },
   });
-  const updates = reorderLinksWithinGroup(links, group, orderedIds);
+  let updates: Array<{ id: string; sort: number }>;
+
+  try {
+    updates = reorderLinksWithinGroup(links, group, orderedIds);
+  } catch {
+    return { ok: false, message: "排序列表已过期，请刷新后重试。" };
+  }
 
   await db.$transaction(
     updates.map((update) =>
@@ -154,4 +160,6 @@ export async function reorderLinksAction(group: string, orderedIds: string[]) {
   );
 
   revalidateLinks();
+
+  return { ok: true, message: "排序已更新。" };
 }

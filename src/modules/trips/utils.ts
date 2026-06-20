@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
-import { formatShanghaiDate } from "../../lib/dayjs";
+import { formatShanghaiDate, parseStrictShanghaiDate } from "../../lib/dayjs";
+import { MAX_DECIMAL_12_2, MAX_DECIMAL_12_2_TEXT } from "../../lib/money";
 
 export const tripStatuses = ["PLANNED", "DONE"] as const;
 export type TripStatusValue = (typeof tripStatuses)[number];
@@ -67,11 +68,11 @@ export function normalizeDestinations(raw: TripInput["destinations"]) {
 }
 
 export function dateFromInput(value: string) {
-  return new Date(`${value}T00:00:00.000Z`);
+  return parseStrictShanghaiDate(value) ?? new Date(Number.NaN);
 }
 
 function isDateInput(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(dateFromInput(value).getTime());
+  return parseStrictShanghaiDate(value) !== null;
 }
 
 function isAllowedCoverUrl(value: string) {
@@ -117,7 +118,12 @@ function normalizeBudget(rawBudget: FormDataEntryValue | string | null | undefin
     return { error: "预算必须是最多两位小数的非负金额。" } as const;
   }
 
-  return { value: new Prisma.Decimal(budget) } as const;
+  const value = new Prisma.Decimal(budget);
+  if (value.gt(MAX_DECIMAL_12_2)) {
+    return { error: `预算不能超过 ${MAX_DECIMAL_12_2_TEXT}。` } as const;
+  }
+
+  return { value } as const;
 }
 
 export function normalizeTripInput(input: TripInput): NormalizedTripInput {
@@ -212,7 +218,7 @@ export function parseTripLocations(value: unknown): TripLocation[] {
     const lat = Number(raw.lat);
     const lng = Number(raw.lng);
 
-    if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    if (!name || !isValidTripCoordinate(lat, lng)) {
       return [];
     }
 
@@ -223,6 +229,10 @@ export function parseTripLocations(value: unknown): TripLocation[] {
       lng,
     }];
   });
+}
+
+export function isValidTripCoordinate(lat: number, lng: number) {
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 }
 
 export function derivePrivateThumbUrl(url: string) {

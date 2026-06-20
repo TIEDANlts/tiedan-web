@@ -99,4 +99,41 @@ describe("reorderLinksWithinGroup", () => {
       { id: "b", sort: 2 },
     ]);
   });
+
+  it("rejects incomplete ordered ids", () => {
+    expect(() =>
+      reorderLinksWithinGroup([
+        { id: "a", group: "工具", sort: 0 },
+        { id: "b", group: "工具", sort: 1 },
+      ], "工具", ["b"]),
+    ).toThrow("排序列表不完整");
+  });
+
+  it("rejects duplicate ordered ids", () => {
+    expect(() =>
+      reorderLinksWithinGroup([
+        { id: "a", group: "工具", sort: 0 },
+        { id: "b", group: "工具", sort: 1 },
+      ], "工具", ["a", "a"]),
+    ).toThrow("排序列表包含重复项");
+  });
+
+  it("rejects ids from another group", () => {
+    expect(() =>
+      reorderLinksWithinGroup([
+        { id: "a", group: "工具", sort: 0 },
+        { id: "b", group: "工具", sort: 1 },
+        { id: "c", group: "阅读", sort: 0 },
+      ], "工具", ["a", "b", "c"]),
+    ).toThrow("排序列表包含其他分组的链接");
+  });
+
+  it("rejects unknown ids", () => {
+    expect(() =>
+      reorderLinksWithinGroup([
+        { id: "a", group: "工具", sort: 0 },
+        { id: "b", group: "工具", sort: 1 },
+      ], "工具", ["a", "unknown"]),
+    ).toThrow("排序列表包含其他分组的链接");
+  });
 });

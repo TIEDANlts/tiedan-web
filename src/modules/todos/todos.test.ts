@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   buildFutureDayGroups,
+  dateToTodoDb,
   getOverdueDays,
   isOverdue,
   moveOverdueToTodayInput,
@@ -90,5 +91,39 @@ describe("readCreateTodoFormData", () => {
 
     expect(result.ok).toBe(false);
     expect(result.ok ? null : result.errors.date).toBeTruthy();
+  });
+
+  test("rejects normalized invalid custom dates", () => {
+    const formData = new FormData();
+    formData.set("content", "Write notes");
+    formData.set("target", "date");
+    formData.set("date", "2026-02-31");
+
+    const result = readCreateTodoFormData(formData, "2026-06-18");
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.errors.date).toBeTruthy();
+  });
+
+  test("accepts leap-day custom dates", () => {
+    const formData = new FormData();
+    formData.set("content", "Write notes");
+    formData.set("target", "date");
+    formData.set("date", "2024-02-29");
+
+    const result = readCreateTodoFormData(formData, "2026-06-18");
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        date: new Date("2024-02-29T00:00:00.000Z"),
+      },
+    });
+  });
+});
+
+describe("dateToTodoDb", () => {
+  test("rejects normalized invalid date text", () => {
+    expect(dateToTodoDb("2026-02-31")).toBeNull();
   });
 });

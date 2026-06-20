@@ -1,10 +1,35 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import * as XLSX from "xlsx";
+import { describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  auth: vi.fn(),
+}));
+
+vi.mock("@/auth", () => ({
+  auth: mocks.auth,
+}));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+}));
+
+vi.mock("@/lib/db", () => ({
+  db: {},
+}));
+
+vi.mock("@/lib/activity", () => ({
+  expenseImportTitle: vi.fn(),
+  recordActivity: vi.fn(),
+}));
 
 import { categorizeExpenseTransaction } from "./categorize";
+import { EXPENSE_IMPORT_MAX_BYTES, validateExpenseImportFile } from "./import-limits";
+import { EXPENSE_IMPORT_MAX_COLUMNS, EXPENSE_IMPORT_MAX_ROWS } from "./parsers/common";
 import { buildExpenseImportPreview, normalizeImportRowsForCreate } from "./import-executor";
 import { detectExpenseImportPlatform, parseExpenseImportFile } from "./parsers";
+import { parseExpenseImportFileAction } from "./actions";
 
 const fixturePath = (...parts: string[]) => join(process.cwd(), "tests", "fixtures", ...parts);
 
@@ -177,6 +202,85 @@ describe("expense import executor helpers", () => {
     expect(rows[0].txnTime).toBeInstanceOf(Date);
     expect(rows[0].raw).toMatchObject({ 交易订单号: "ALI-EXP-001" });
   });
+
+  it("deduplicates repeated transaction numbers within the same file", () => {
+    const parsed = {
+      platform: "wechat" as const,
+      encoding: "utf8" as const,
+      filteredRows: [],
+      errors: [],
+      rows: [
+        {
+          txnNo: "DUP-1",
+          txnTime: "2026-06-01 10:00:00",
+          amount: "1.00",
+          direction: "EXPENSE" as const,
+          merchant: "A",
+          item: null,
+          payMethod: null,
+          sourceCategory: null,
+          raw: {},
+        },
+        {
+          txnNo: "DUP-1",
+          txnTime: "2026-06-01 10:01:00",
+          amount: "2.00",
+          direction: "EXPENSE" as const,
+          merchant: "B",
+          item: null,
+          payMethod: null,
+          sourceCategory: null,
+          raw: {},
+        },
+      ],
+    };
+
+    const preview = buildExpenseImportPreview(parsed, categories, new Set());
+    const rows = normalizeImportRowsForCreate(parsed, categories, new Set(), "batch-1");
+
+    expect(preview.stats).toMatchObject({
+      parsed: 2,
+      willImport: 1,
+      duplicate: 1,
+    });
+    expect(preview.rows.map((row) => ({ txnNo: row.txnNo, duplicate: row.duplicate, importable: row.importable }))).toEqual([
+      { txnNo: "DUP-1", duplicate: false, importable: true },
+      { txnNo: "DUP-1", duplicate: true, importable: false },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ txnNo: "DUP-1", amount: "1.00", merchant: "A" });
+  });
+
+  it("counts every existing duplicate row instead of unique duplicate transaction numbers", () => {
+    const parsed = {
+      platform: "wechat" as const,
+      encoding: "utf8" as const,
+      filteredRows: [],
+      errors: [],
+      rows: Array.from({ length: 3 }, (_, index) => ({
+        txnNo: "EXISTS-1",
+        txnTime: `2026-06-01 10:0${index}:00`,
+        amount: "1.00",
+        direction: "EXPENSE" as const,
+        merchant: `商户${index}`,
+        item: null,
+        payMethod: null,
+        sourceCategory: null,
+        raw: {},
+      })),
+    };
+
+    const preview = buildExpenseImportPreview(parsed, categories, new Set(["EXISTS-1"]));
+    const rows = normalizeImportRowsForCreate(parsed, categories, new Set(["EXISTS-1"]), "batch-1");
+
+    expect(preview.stats).toMatchObject({
+      parsed: 3,
+      willImport: 0,
+      duplicate: 3,
+    });
+    expect(preview.rows.every((row) => row.duplicate && !row.importable)).toBe(true);
+    expect(rows).toHaveLength(0);
+  });
 });
 
 describe("parseExpenseImportFile column alignment", () => {
@@ -200,5 +304,127 @@ describe("parseExpenseImportFile column alignment", () => {
       amount: "18.50",
       txnNo: "ALI-MID-001",
     });
+  });
+
+  it("rejects imported amounts beyond Decimal(12,2)", () => {
+    const csv = [
+      "支付宝交易记录明细",
+      "交易时间,收/支,金额,交易订单号,交易状态",
+      "2026-06-01 08:12:03,支出,9999999999.99,ALI-MAX-OK,交易成功",
+      "2026-06-01 08:13:03,支出,10000000000.00,ALI-MAX-BAD,交易成功",
+    ].join("\n");
+
+    const result = parseExpenseImportFile(Buffer.from(csv, "utf-8"), "alipay");
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      txnNo: "ALI-MAX-OK",
+      amount: "9999999999.99",
+    });
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        txnNo: "ALI-MAX-BAD",
+        message: "金额不能超过 9,999,999,999.99。",
+      }),
+    );
+  });
+});
+
+describe("expense import file boundaries", () => {
+  it("rejects oversized files before reading arrayBuffer", () => {
+    const arrayBuffer = vi.fn();
+    const file = new File([new Uint8Array(1)], "alipay.csv", { type: "text/csv" });
+
+    Object.defineProperty(file, "size", { value: EXPENSE_IMPORT_MAX_BYTES + 1 });
+    Object.defineProperty(file, "arrayBuffer", { value: arrayBuffer });
+
+    const result = validateExpenseImportFile(file);
+
+    expect(result).toEqual({ ok: false, message: "账单文件不能超过 10MB，请拆分后导入。" });
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  it("rejects oversized files in the server action before reading arrayBuffer", async () => {
+    const arrayBuffer = vi.fn();
+    const file = new File([new Uint8Array(1)], "alipay.csv", { type: "text/csv" });
+    const formData = new FormData();
+
+    Object.defineProperty(file, "size", { value: EXPENSE_IMPORT_MAX_BYTES + 1 });
+    Object.defineProperty(file, "arrayBuffer", { value: arrayBuffer });
+    formData.set("file", file);
+    mocks.auth.mockResolvedValue({ user: { id: "user-1" } });
+
+    await expect(parseExpenseImportFileAction(formData)).resolves.toEqual({
+      ok: false,
+      message: "账单文件不能超过 10MB，请拆分后导入。",
+    });
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  it("returns a parser error when the CSV has too many rows", () => {
+    const csv = [
+      "支付宝交易记录明细",
+      "交易时间,收/支,金额,交易订单号,交易状态",
+      ...Array.from({ length: EXPENSE_IMPORT_MAX_ROWS + 1 }, (_, index) =>
+        `2026-06-01 08:12:03,支出,18.50,ALI-LIMIT-${index},交易成功`,
+      ),
+    ].join("\n");
+
+    const result = parseExpenseImportFile(Buffer.from(csv, "utf-8"), "alipay");
+
+    expect(result.rows).toHaveLength(0);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        rowNumber: 0,
+        message: `导入文件不能超过 ${EXPENSE_IMPORT_MAX_ROWS} 行，请拆分后再导入。`,
+      }),
+    );
+  });
+
+  it("does not expand oversized CSV sheets with sheet_to_json", () => {
+    const csv = [
+      "支付宝交易记录明细",
+      "交易时间,收/支,金额,交易订单号,交易状态",
+      ...Array.from({ length: EXPENSE_IMPORT_MAX_ROWS + 1 }, (_, index) =>
+        `2026-06-01 08:12:03,支出,18.50,ALI-LIMIT-${index},交易成功`,
+      ),
+    ].join("\n");
+    const sheetToJson = vi.spyOn(XLSX.utils, "sheet_to_json");
+
+    try {
+      const result = parseExpenseImportFile(Buffer.from(csv, "utf-8"), "alipay");
+
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          rowNumber: 0,
+          message: `导入文件不能超过 ${EXPENSE_IMPORT_MAX_ROWS} 行，请拆分后再导入。`,
+        }),
+      );
+      expect(sheetToJson).not.toHaveBeenCalled();
+    } finally {
+      sheetToJson.mockRestore();
+    }
+  });
+
+  it("returns a parser error when the CSV has too many columns", () => {
+    const headers = [
+      "交易时间",
+      "收/支",
+      "金额",
+      "交易订单号",
+      "交易状态",
+      ...Array.from({ length: EXPENSE_IMPORT_MAX_COLUMNS - 4 }, (_, index) => `额外列${index}`),
+    ];
+    const csv = ["支付宝交易记录明细", headers.join(","), headers.map(() => "x").join(",")].join("\n");
+
+    const result = parseExpenseImportFile(Buffer.from(csv, "utf-8"), "alipay");
+
+    expect(result.rows).toHaveLength(0);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        rowNumber: 0,
+        message: `导入文件不能超过 ${EXPENSE_IMPORT_MAX_COLUMNS} 列，请删减后再导入。`,
+      }),
+    );
   });
 });

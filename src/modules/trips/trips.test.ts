@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   derivePrivateThumbUrl,
   enumerateTripDates,
+  isValidTripCoordinate,
   normalizeTripInput,
   planTripDaySync,
   parseTripLocations,
@@ -83,6 +84,56 @@ describe("normalizeTripInput", () => {
     expect(result.ok).toBe(false);
     expect(result.ok ? null : result.errors.endDate).toBe("结束日期不能早于开始日期。");
   });
+
+  it("rejects normalized invalid trip dates", () => {
+    const result = normalizeTripInput({
+      title: "Invalid dates",
+      startDate: "2026-02-31",
+      endDate: "2026-13-01",
+      destinations: "Hangzhou",
+      status: "PLANNED",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.errors.startDate).toBeTruthy();
+    expect(result.ok ? null : result.errors.endDate).toBeTruthy();
+  });
+
+  it("accepts leap-day trip dates", () => {
+    const result = normalizeTripInput({
+      title: "Leap day",
+      startDate: "2024-02-29",
+      endDate: "2024-02-29",
+      destinations: "Hangzhou",
+      status: "PLANNED",
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        startDate: new Date("2024-02-29T00:00:00.000Z"),
+        endDate: new Date("2024-02-29T00:00:00.000Z"),
+      },
+    });
+  });
+
+  it("rejects budgets beyond Decimal(12,2)", () => {
+    const result = normalizeTripInput({
+      title: "预算过大",
+      startDate: "2026-06-15",
+      endDate: "2026-06-17",
+      destinations: "杭州",
+      status: "PLANNED",
+      budget: "10000000000.00",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      errors: {
+        budget: "预算不能超过 9,999,999,999.99。",
+      },
+    });
+  });
 });
 
 describe("readTripFormData", () => {
@@ -116,6 +167,13 @@ describe("readTripFormData", () => {
 });
 
 describe("parseTripLocations", () => {
+  it("validates latitude and longitude ranges", () => {
+    expect(isValidTripCoordinate(90, 180)).toBe(true);
+    expect(isValidTripCoordinate(-90, -180)).toBe(true);
+    expect(isValidTripCoordinate(90.000001, 0)).toBe(false);
+    expect(isValidTripCoordinate(0, 180.000001)).toBe(false);
+  });
+
   it("normalizes persisted location JSON", () => {
     expect(parseTripLocations([{ name: "西湖", lat: 30.25, lng: 120.14 }])).toEqual([
       expect.objectContaining({ name: "西湖", lat: 30.25, lng: 120.14 }),
@@ -124,6 +182,7 @@ describe("parseTripLocations", () => {
 
   it("drops invalid coordinates", () => {
     expect(parseTripLocations([{ name: "坏坐标", lat: "x", lng: 120 }])).toEqual([]);
+    expect(parseTripLocations([{ name: "坏坐标", lat: 999, lng: 999 }])).toEqual([]);
   });
 });
 

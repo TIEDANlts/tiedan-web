@@ -8,8 +8,10 @@ import { db } from "@/lib/db";
 import { formatShanghaiDate } from "@/lib/dayjs";
 import { remoteImageErrorMessage, saveFromUrl } from "@/lib/storage";
 import { executeMediaImportRows } from "@/modules/media/import-executor";
+import { validateMediaImportFile } from "@/modules/media/import-limits";
 import {
   guessMediaImportMapping,
+  MediaImportLimitError,
   normalizeMediaImportRow,
   parseMediaImportFile,
   type MediaImportDefaults,
@@ -341,6 +343,11 @@ async function isDuplicateImportRow(
 export async function parseMediaImportFileAction(formData: FormData): Promise<MediaImportParseState> {
   await requireMediaSession();
 
+  const validation = validateMediaImportFile(formData.get("file"));
+  if (!validation.ok) {
+    return validation;
+  }
+
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, message: "请选择要导入的 CSV 或 XLSX 文件。" };
@@ -362,7 +369,11 @@ export async function parseMediaImportFileAction(formData: FormData): Promise<Me
       parsed,
       mapping: guessMediaImportMapping(parsed.headers),
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof MediaImportLimitError) {
+      return { ok: false, message: error.message };
+    }
+
     return { ok: false, message: "文件解析失败，请确认导出文件没有损坏。" };
   }
 }
@@ -434,7 +445,24 @@ export async function previewMediaImportAction(payload: MediaImportPayload): Pro
 export async function executeMediaImportAction(payload: MediaImportPayload): Promise<MediaImportExecuteState> {
   await requireMediaSession();
 
-  const rows: MediaImportRowData[] = normalizeRows(payload).flatMap((row) => (row.result.ok ? [row.result.data] : []));
+  const normalizedRows = normalizeRows(payload);
+  const rows: MediaImportRowData[] = [];
+  const rowNumbers: number[] = [];
+  const invalidReasons: Array<{ rowNumber: number; type: "failed"; message: string }> = [];
+
+  for (const row of normalizedRows) {
+    if (row.result.ok) {
+      rows.push(row.result.data);
+      rowNumbers.push(row.rowNumber);
+      continue;
+    }
+
+    invalidReasons.push({
+      rowNumber: row.rowNumber,
+      type: "failed",
+      message: row.result.errors.join("；"),
+    });
+  }
 
   const result = await executeMediaImportRows(rows, {
     async hasDoubanId(doubanId) {
@@ -455,10 +483,17 @@ export async function executeMediaImportAction(payload: MediaImportPayload): Pro
       await db.mediaItem.create({ data });
     },
   });
+  const reasons = [
+    ...invalidReasons,
+    ...result.reasons.map((reason) => ({
+      ...reason,
+      rowNumber: rowNumbers[reason.rowNumber - 1] ?? reason.rowNumber,
+    })),
+  ].sort((left, right) => left.rowNumber - right.rowNumber);
 
   revalidateMedia();
 
-  return { ok: true, ...result };
+  return { ok: true, ...result, failed: result.failed + invalidReasons.length, reasons };
 }
 
 export async function searchMediaMetadataAction(

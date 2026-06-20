@@ -1,7 +1,9 @@
 import { TextDecoder } from "node:util";
+import { Prisma } from "@prisma/client";
 import iconv from "iconv-lite";
 import * as XLSX from "xlsx";
 
+import { MAX_DECIMAL_12_2, MAX_DECIMAL_12_2_TEXT } from "@/lib/money";
 import type {
   ExpenseImportEncoding,
   ExpenseImportParserOptions,
@@ -12,6 +14,11 @@ import type {
 import type { TxnDirectionValue } from "../utils";
 
 const filteredStatuses = new Set(["交易关闭", "已全额退款"]);
+
+export const EXPENSE_IMPORT_MAX_ROWS = 20000;
+export const EXPENSE_IMPORT_MAX_COLUMNS = 100;
+
+type SheetToJsonOptionsWithLimit = XLSX.Sheet2JSONOpts & { sheetRows: number };
 
 function cleanText(value: unknown) {
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
@@ -39,20 +46,72 @@ export function decodeExpenseCsv(buffer: Buffer): { text: string; encoding: Expe
   };
 }
 
-function readSheetRows(text: string) {
+function sheetDimensions(sheet: XLSX.WorkSheet) {
+  const ref = sheet["!ref"];
+
+  if (!ref) {
+    return { rows: 0, columns: 0 };
+  }
+
+  const range = XLSX.utils.decode_range(ref);
+
+  return {
+    rows: range.e.r - range.s.r + 1,
+    columns: range.e.c - range.s.c + 1,
+  };
+}
+
+function readSheetRows(text: string, options: ExpenseImportParserOptions, encoding: ExpenseImportEncoding) {
   const workbook = XLSX.read(text, { type: "string", raw: true });
   const sheetName = workbook.SheetNames[0];
   const sheet = sheetName ? workbook.Sheets[sheetName] : null;
 
   if (!sheet) {
-    return [];
+    return { ok: true as const, rows: [] };
   }
 
-  return XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    defval: "",
-    raw: false,
-  });
+  const dimensions = sheetDimensions(sheet);
+
+  if (dimensions.rows > EXPENSE_IMPORT_MAX_ROWS) {
+    return {
+      ok: false as const,
+      parsed: importLimitError(options, encoding, `导入文件不能超过 ${EXPENSE_IMPORT_MAX_ROWS} 行，请拆分后再导入。`),
+    };
+  }
+
+  if (dimensions.columns > EXPENSE_IMPORT_MAX_COLUMNS) {
+    return {
+      ok: false as const,
+      parsed: importLimitError(options, encoding, `导入文件不能超过 ${EXPENSE_IMPORT_MAX_COLUMNS} 列，请删减后再导入。`),
+    };
+  }
+
+  return {
+    ok: true as const,
+    rows: XLSX.utils.sheet_to_json<unknown[]>(
+      sheet,
+      {
+        header: 1,
+        defval: "",
+        raw: false,
+        sheetRows: EXPENSE_IMPORT_MAX_ROWS + 1,
+      } as SheetToJsonOptionsWithLimit,
+    ),
+  };
+}
+
+function importLimitError(
+  options: ExpenseImportParserOptions,
+  encoding: ExpenseImportEncoding,
+  message: string,
+): ParsedExpenseImportFile {
+  return {
+    platform: options.platform,
+    encoding,
+    rows: [],
+    filteredRows: [],
+    errors: [{ rowNumber: 0, txnNo: null, message, raw: {} }],
+  };
 }
 
 function findHeaderIndex(rows: string[][]) {
@@ -93,11 +152,20 @@ function normalizeDirection(rawDirection: string): TxnDirectionValue | null {
   return null;
 }
 
-function normalizeAmount(rawAmount: string) {
+function normalizeAmount(rawAmount: string): { value: string } | { error: string } {
   const amount = rawAmount.replace(/[¥￥,\s]/g, "");
   const match = amount.match(/^\d+(?:\.\d{1,2})?$/);
 
-  return match ? Number(amount).toFixed(2) : null;
+  if (!match) {
+    return { error: "金额格式不正确。" };
+  }
+
+  const value = new Prisma.Decimal(amount);
+  if (value.gt(MAX_DECIMAL_12_2)) {
+    return { error: `金额不能超过 ${MAX_DECIMAL_12_2_TEXT}。` };
+  }
+
+  return { value: value.toFixed(2) };
 }
 
 function normalizeTxnTime(rawTime: string) {
@@ -146,8 +214,8 @@ function validateRow(raw: Record<string, string>, options: ExpenseImportParserOp
   }
 
   const amount = normalizeAmount(readRequired(raw, options.amountHeader));
-  if (!amount) {
-    return "金额格式不正确。";
+  if ("error" in amount) {
+    return amount.error;
   }
 
   const txnNo = readRequired(raw, options.txnNoHeader);
@@ -161,7 +229,7 @@ function validateRow(raw: Record<string, string>, options: ExpenseImportParserOp
     merchant: readRequired(raw, options.merchantHeader) || null,
     item: readRequired(raw, options.itemHeader) || null,
     direction,
-    amount,
+    amount: amount.value,
     payMethod: readRequired(raw, options.payMethodHeader) || null,
     txnNo,
     raw,
@@ -170,7 +238,23 @@ function validateRow(raw: Record<string, string>, options: ExpenseImportParserOp
 
 export function parseExpenseCsv(buffer: Buffer, options: ExpenseImportParserOptions): ParsedExpenseImportFile {
   const decoded = decodeExpenseCsv(buffer);
-  const rows = readSheetRows(decoded.text).map((row) => row.map(cleanText));
+  const sheetRows = readSheetRows(decoded.text, options, decoded.encoding);
+
+  if (!sheetRows.ok) {
+    return sheetRows.parsed;
+  }
+
+  const rows = sheetRows.rows.map((row) => row.map(cleanText));
+  const maxColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
+
+  if (rows.length > EXPENSE_IMPORT_MAX_ROWS) {
+    return importLimitError(options, decoded.encoding, `导入文件不能超过 ${EXPENSE_IMPORT_MAX_ROWS} 行，请拆分后再导入。`);
+  }
+
+  if (maxColumns > EXPENSE_IMPORT_MAX_COLUMNS) {
+    return importLimitError(options, decoded.encoding, `导入文件不能超过 ${EXPENSE_IMPORT_MAX_COLUMNS} 列，请删减后再导入。`);
+  }
+
   const headerIndex = findHeaderIndex(rows);
   const parsedRows: ParsedExpenseImportRow[] = [];
   const filteredRows: FilteredExpenseImportRow[] = [];

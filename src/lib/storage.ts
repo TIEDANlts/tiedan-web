@@ -218,6 +218,41 @@ function outputContentType(output: ImageOutput) {
   return output === "jpeg" ? "image/jpeg" : "image/webp";
 }
 
+function detectedImageFromSharpFormat(format: string | undefined): DetectedImage | null {
+  switch (format) {
+    case "jpeg":
+    case "jpg":
+      return { contentType: "image/jpeg", extension: "jpg", output: "jpeg" };
+    case "png":
+      return { contentType: "image/png", extension: "png", output: "webp" };
+    case "webp":
+      return { contentType: "image/webp", extension: "webp", output: "webp" };
+    case "gif":
+      return { contentType: "image/gif", extension: "gif", output: "webp", animated: true };
+    default:
+      return null;
+  }
+}
+
+async function detectActualImage(buffer: Buffer, hinted: DetectedImage) {
+  try {
+    const metadata = await sharp(buffer, { animated: hinted.animated }).metadata();
+    const detected = detectedImageFromSharpFormat(metadata.format);
+
+    if (!detected) {
+      throw new StorageError("只支持上传 jpeg、png、webp 或 gif 图片。", "UNSUPPORTED_TYPE");
+    }
+
+    return detected;
+  } catch (error) {
+    if (error instanceof StorageError) {
+      throw error;
+    }
+
+    throw new StorageError("只支持上传 jpeg、png、webp 或 gif 图片。", "UNSUPPORTED_TYPE");
+  }
+}
+
 function formatMegabytes(bytes: number) {
   return Math.floor(bytes / 1024 / 1024);
 }
@@ -306,7 +341,8 @@ async function processImage(buffer: Buffer, image: DetectedImage, size: number) 
 export async function save(buffer: Buffer, options: SaveOptions): Promise<SaveResult> {
   assertLocalUploadSize(buffer.byteLength);
 
-  const image = detectImageType(options.contentType, options.filename);
+  const hintedImage = detectImageType(options.contentType, options.filename);
+  const image = await detectActualImage(buffer, hintedImage);
   const safeSubdir = sanitizeStorageSubdir(options.subdir);
   const areaRoot = getAreaRoot(options.area);
   const uploadDir = path.resolve(areaRoot, safeSubdir);

@@ -36,6 +36,12 @@ export type ExpenseImportCreateRow = {
   raw: Prisma.InputJsonValue;
 };
 
+export type ExpenseImportDuplicateAnalysis = {
+  duplicateRows: number;
+  duplicateTxnNos: Set<string>;
+  duplicateRowIndexes: Set<number>;
+};
+
 function toTransactionDate(txnTime: string) {
   return new Date(`${txnTime.replace(" ", "T")}+08:00`);
 }
@@ -52,13 +58,39 @@ function categoryIdFor(row: ParsedExpenseImportRow, categories: ExpenseCategoryF
   );
 }
 
+export function analyzeExpenseImportDuplicates(
+  parsed: ParsedExpenseImportFile,
+  existingTxnNos: Set<string>,
+): ExpenseImportDuplicateAnalysis {
+  const seen = new Set<string>();
+  const duplicateTxnNos = new Set<string>();
+  const duplicateRowIndexes = new Set<number>();
+
+  for (const [index, row] of parsed.rows.entries()) {
+    if (existingTxnNos.has(row.txnNo) || seen.has(row.txnNo)) {
+      duplicateTxnNos.add(row.txnNo);
+      duplicateRowIndexes.add(index);
+      continue;
+    }
+
+    seen.add(row.txnNo);
+  }
+
+  return {
+    duplicateRows: duplicateRowIndexes.size,
+    duplicateTxnNos,
+    duplicateRowIndexes,
+  };
+}
+
 export function buildExpenseImportPreview(
   parsed: ParsedExpenseImportFile,
   categories: ExpenseCategoryForCategorize[],
   existingTxnNos: Set<string>,
 ): ExpenseImportPreview {
+  const duplicateInfo = analyzeExpenseImportDuplicates(parsed, existingTxnNos);
   const rows = parsed.rows.slice(0, 50).map<ExpenseImportPreviewRow>((row, index) => {
-    const duplicate = existingTxnNos.has(row.txnNo);
+    const duplicate = duplicateInfo.duplicateRowIndexes.has(index);
 
     return {
       ...row,
@@ -68,13 +100,12 @@ export function buildExpenseImportPreview(
       importable: !duplicate,
     };
   });
-  const duplicate = parsed.rows.filter((row) => existingTxnNos.has(row.txnNo)).length;
 
   return {
     stats: {
       parsed: parsed.rows.length,
-      willImport: parsed.rows.length - duplicate,
-      duplicate,
+      willImport: parsed.rows.length - duplicateInfo.duplicateRows,
+      duplicate: duplicateInfo.duplicateRows,
       filtered: parsed.filteredRows.length,
       failed: parsed.errors.length,
     },
@@ -88,8 +119,10 @@ export function normalizeImportRowsForCreate(
   existingTxnNos: Set<string>,
   importBatchId: string,
 ): ExpenseImportCreateRow[] {
+  const duplicateInfo = analyzeExpenseImportDuplicates(parsed, existingTxnNos);
+
   return parsed.rows
-    .filter((row) => !existingTxnNos.has(row.txnNo))
+    .filter((_row, index) => !duplicateInfo.duplicateRowIndexes.has(index))
     .map((row) => ({
       platform: parsed.platform,
       txnTime: toTransactionDate(row.txnTime),

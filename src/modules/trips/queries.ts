@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { formatShanghaiDate, formatShanghaiDateTime } from "@/lib/dayjs";
 import { derivePrivateThumbUrl, parseTripLocations, tripDaysCount, type TripStatusValue } from "@/modules/trips/utils";
+import type { Prisma } from "@prisma/client";
 
 export type TripSearchParams = Record<string, string | string[] | undefined>;
 
@@ -65,6 +66,8 @@ export type FootprintData = {
     trips: number;
   };
 };
+
+type SerializedLocation = ReturnType<typeof parseTripLocations>[number];
 
 function firstParamValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -132,13 +135,29 @@ function serializeDay(day: {
   date: Date;
   noteMd: string | null;
   locations: unknown;
+  locationItems?: Array<{
+    id: string;
+    name: string;
+    lat: Prisma.Decimal;
+    lng: Prisma.Decimal;
+  }>;
   photos: string[];
 }): TripDayItem {
+  const locations: SerializedLocation[] =
+    Array.isArray(day.locationItems)
+      ? day.locationItems.map((location) => ({
+          id: location.id,
+          name: location.name,
+          lat: location.lat.toNumber(),
+          lng: location.lng.toNumber(),
+        }))
+      : parseTripLocations(day.locations);
+
   return {
     id: day.id,
     date: formatShanghaiDate(day.date),
     noteMd: day.noteMd ?? "",
-    locations: parseTripLocations(day.locations),
+    locations,
     photos: day.photos.map((url) => ({
       url,
       thumbUrl: derivePrivateThumbUrl(url),
@@ -180,6 +199,11 @@ export async function getTripDetail(id: string): Promise<TripDetail> {
     include: {
       days: {
         orderBy: { date: "asc" },
+        include: {
+          locationItems: {
+            orderBy: [{ sort: "asc" }, { createdAt: "asc" }],
+          },
+        },
       },
     },
   });
@@ -201,7 +225,13 @@ export async function getFootprintData(): Promise<FootprintData> {
   const trips = await db.trip.findMany({
     where: { status: "DONE" },
     include: {
-      days: true,
+      days: {
+        include: {
+          locationItems: {
+            orderBy: [{ sort: "asc" }, { createdAt: "asc" }],
+          },
+        },
+      },
     },
   });
   const byName = new Map<string, FootprintPoint>();
@@ -209,7 +239,7 @@ export async function getFootprintData(): Promise<FootprintData> {
   for (const trip of trips) {
     const namesInTrip = new Set<string>();
     for (const day of trip.days) {
-      for (const location of parseTripLocations(day.locations)) {
+      for (const location of serializeDay(day).locations) {
         const existing = byName.get(location.name);
         namesInTrip.add(location.name);
         if (!existing) {

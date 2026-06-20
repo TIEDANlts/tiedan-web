@@ -1,12 +1,44 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import iconv from "iconv-lite";
-import { describe, expect, it } from "vitest";
+import * as XLSX from "xlsx";
+import { describe, expect, it, vi } from "vitest";
 
+const mocks = vi.hoisted(() => ({
+  auth: vi.fn(),
+}));
+
+vi.mock("@/auth", () => ({
+  auth: mocks.auth,
+}));
+
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+}));
+
+vi.mock("@/lib/db", () => ({
+  db: {},
+}));
+
+vi.mock("@/lib/activity", () => ({
+  mediaDoneTitle: vi.fn(),
+  recordActivity: vi.fn(),
+  shouldRecordStatusTransition: vi.fn(),
+}));
+
+vi.mock("@/lib/storage", () => ({
+  remoteImageErrorMessage: vi.fn(),
+  saveFromUrl: vi.fn(),
+}));
+
+import { executeMediaImportAction, parseMediaImportFileAction } from "./actions";
+import { MEDIA_IMPORT_MAX_BYTES, validateMediaImportFile } from "./import-limits";
 import {
   decodeMediaCsv,
   extractDoubanId,
   guessMediaImportMapping,
+  MEDIA_IMPORT_MAX_COLUMNS,
+  MEDIA_IMPORT_MAX_ROWS,
   normalizeMediaImportRow,
   parseMediaImportFile,
 } from "./import-parser";
@@ -81,6 +113,71 @@ describe("media import parser", () => {
     });
   });
 
+  it("rejects rows with invalid marked dates", () => {
+    const result = normalizeMediaImportRow(
+      {
+        标题: "活着",
+        标记日期: "2026-02-31",
+      },
+      {
+        title: "标题",
+        type: null,
+        rating: null,
+        review: null,
+        markedAt: "标记日期",
+        link: null,
+        year: null,
+        coverUrl: null,
+        status: null,
+      },
+      {
+        defaultType: "BOOK",
+        defaultStatus: "DONE",
+        statusValueMap: {},
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.ok ? null : result.errors).toContain("标记日期格式不正确。");
+  });
+
+  it("accepts leap-day marked dates and keeps empty dates null", () => {
+    const mapping = {
+      title: "标题",
+      type: null,
+      rating: null,
+      review: null,
+      markedAt: "标记日期",
+      link: null,
+      year: null,
+      coverUrl: null,
+      status: null,
+    };
+    const defaults = {
+      defaultType: "BOOK" as const,
+      defaultStatus: "DONE" as const,
+      statusValueMap: {},
+    };
+
+    expect(
+      normalizeMediaImportRow({ 标题: "Leap day", 标记日期: "2024-02-29" }, mapping, defaults),
+    ).toMatchObject({
+      ok: true,
+      data: {
+        markedAt: "2024-02-29",
+      },
+    });
+
+    expect(
+      normalizeMediaImportRow({ 标题: "No date", 标记日期: "" }, mapping, defaults),
+    ).toMatchObject({
+      ok: true,
+      data: {
+        markedAt: null,
+      },
+    });
+  });
+
   it("falls back to gbk when utf-8 decoding produces replacement characters", async () => {
     const utf8Text = await readFile(fixturePath, "utf8");
     const gbkBuffer = iconv.encode(utf8Text, "gbk");
@@ -90,5 +187,112 @@ describe("media import parser", () => {
     expect(decoded.encoding).toBe("gbk");
     expect(decoded.text).toContain("书影音名");
     expect(decoded.text).toContain("花样年华");
+  });
+});
+
+describe("media import file boundaries", () => {
+  it("rejects oversized files before reading arrayBuffer", () => {
+    const arrayBuffer = vi.fn();
+    const file = new File([new Uint8Array(1)], "douban.csv", { type: "text/csv" });
+
+    Object.defineProperty(file, "size", { value: MEDIA_IMPORT_MAX_BYTES + 1 });
+    Object.defineProperty(file, "arrayBuffer", { value: arrayBuffer });
+
+    const result = validateMediaImportFile(file);
+
+    expect(result).toEqual({ ok: false, message: "书影导入文件不能超过 20MB，请拆分后导入。" });
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  it("rejects oversized files in the server action before reading arrayBuffer", async () => {
+    const arrayBuffer = vi.fn();
+    const file = new File([new Uint8Array(1)], "douban.csv", { type: "text/csv" });
+    const formData = new FormData();
+
+    Object.defineProperty(file, "size", { value: MEDIA_IMPORT_MAX_BYTES + 1 });
+    Object.defineProperty(file, "arrayBuffer", { value: arrayBuffer });
+    formData.set("file", file);
+    mocks.auth.mockResolvedValue({ user: { id: "user-1" } });
+
+    await expect(parseMediaImportFileAction(formData)).resolves.toEqual({
+      ok: false,
+      message: "书影导入文件不能超过 20MB，请拆分后导入。",
+    });
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  it("throws a clear error when the import has too many rows", () => {
+    const csv = [
+      "标题,类型",
+      ...Array.from({ length: MEDIA_IMPORT_MAX_ROWS + 1 }, (_, index) => `条目${index},BOOK`),
+    ].join("\n");
+
+    expect(() => parseMediaImportFile(Buffer.from(csv, "utf-8"), "douban.csv")).toThrow(
+      `导入文件不能超过 ${MEDIA_IMPORT_MAX_ROWS} 行，请拆分后再导入。`,
+    );
+  });
+
+  it("does not expand oversized XLSX sheets with sheet_to_json", () => {
+    const workbook = XLSX.utils.book_new();
+    const sheet: XLSX.WorkSheet = {
+      "!ref": `A1:A${MEDIA_IMPORT_MAX_ROWS + 2}`,
+      A1: { t: "s", v: "标题" },
+    };
+
+    XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    const sheetToJson = vi.spyOn(XLSX.utils, "sheet_to_json");
+
+    try {
+      expect(() => parseMediaImportFile(buffer, "douban.xlsx")).toThrow(
+        `导入文件不能超过 ${MEDIA_IMPORT_MAX_ROWS} 行，请拆分后再导入。`,
+      );
+      expect(sheetToJson).not.toHaveBeenCalled();
+    } finally {
+      sheetToJson.mockRestore();
+    }
+  });
+
+  it("throws a clear error when the import has too many columns", () => {
+    const headers = Array.from({ length: MEDIA_IMPORT_MAX_COLUMNS + 1 }, (_, index) => `列${index}`);
+    const csv = [headers.join(","), headers.map(() => "值").join(",")].join("\n");
+
+    expect(() => parseMediaImportFile(Buffer.from(csv, "utf-8"), "douban.csv")).toThrow(
+      `导入文件不能超过 ${MEDIA_IMPORT_MAX_COLUMNS} 列，请删减后再导入。`,
+    );
+  });
+});
+
+describe("media import actions", () => {
+  it("reports invalid marked dates during execution instead of silently dropping rows", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "user-1" } });
+
+    await expect(
+      executeMediaImportAction({
+        rows: [{ 标题: "活着", 标记日期: "2026-02-31" }],
+        mapping: {
+          title: "标题",
+          type: null,
+          rating: null,
+          review: null,
+          markedAt: "标记日期",
+          link: null,
+          year: null,
+          coverUrl: null,
+          status: null,
+        },
+        defaults: {
+          defaultType: "BOOK",
+          defaultStatus: "DONE",
+          statusValueMap: {},
+        },
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      success: 0,
+      skipped: 0,
+      failed: 1,
+      reasons: [{ rowNumber: 1, type: "failed", message: "标记日期格式不正确。" }],
+    });
   });
 });

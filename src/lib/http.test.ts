@@ -5,6 +5,8 @@ import { SsrfError } from "./ssrf";
 
 afterEach(() => {
   delete process.env.SSRF_ALLOW_PRIVATE;
+  delete process.env.OUTBOUND_PROXY;
+  delete process.env.OUTBOUND_PROXY_TRUSTS_PRIVATE_GUARD;
 });
 
 describe("fetchWithRetry SSRF guard", () => {
@@ -38,6 +40,45 @@ describe("fetchWithRetry SSRF guard", () => {
     );
     await expect(fetchWithRetry("http://127.0.0.1:9/", { retries: 0, timeoutMs: 1000 })).rejects.toMatchObject({
       code: "SSRF_BLOCKED",
+    });
+  });
+
+  it("rejects OUTBOUND_PROXY unless the private guard bypass is explicitly trusted", async () => {
+    process.env.OUTBOUND_PROXY = "http://proxy.example:8080";
+
+    await expect(fetchWithRetry("https://example.com/", { retries: 0, timeoutMs: 1000 })).rejects.toMatchObject({
+      code: "SSRF_BLOCKED",
+    });
+  });
+
+  it("keeps literal private URL checks when OUTBOUND_PROXY is explicitly trusted", async () => {
+    process.env.OUTBOUND_PROXY = "http://proxy.example:8080";
+    process.env.OUTBOUND_PROXY_TRUSTS_PRIVATE_GUARD = "1";
+
+    await expect(fetchWithRetry("http://169.254.169.254/latest/meta-data/", { retries: 0, timeoutMs: 1000 })).rejects
+      .toMatchObject({
+        code: "SSRF_BLOCKED",
+        cause: expect.any(SsrfError),
+      });
+  });
+
+  it("does not reuse a stale proxy dispatcher after ProxyAgent rejects a new proxy URL", async () => {
+    process.env.OUTBOUND_PROXY = "http://127.0.0.1:9";
+    process.env.OUTBOUND_PROXY_TRUSTS_PRIVATE_GUARD = "1";
+
+    await expect(fetchWithRetry("https://example.com/", { retries: 0, timeoutMs: 1000 })).rejects.toMatchObject({
+      code: "DOWNLOAD_FAILED",
+    });
+
+    process.env.OUTBOUND_PROXY = "not-a-url";
+
+    await expect(fetchWithRetry("https://example.com/", { retries: 0, timeoutMs: 1000 })).rejects.toMatchObject({
+      code: "DOWNLOAD_FAILED",
+      cause: expect.objectContaining({ message: "Invalid URL" }),
+    });
+    await expect(fetchWithRetry("https://example.com/", { retries: 0, timeoutMs: 1000 })).rejects.toMatchObject({
+      code: "DOWNLOAD_FAILED",
+      cause: expect.objectContaining({ message: "Invalid URL" }),
     });
   });
 });

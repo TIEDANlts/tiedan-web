@@ -1,4 +1,4 @@
-import { dayjs, formatShanghaiDate, toShanghaiTime } from "../../lib/dayjs";
+import { dayjs, formatShanghaiDate, parseStrictShanghaiDate, toShanghaiTime } from "../../lib/dayjs";
 
 export type TodoDateValue = string | Date | null;
 
@@ -67,7 +67,7 @@ function normalizeDateInput(value: FormDataEntryValue | string | null) {
 }
 
 export function dateToTodoDb(date: string | null) {
-  return date ? new Date(`${date}T00:00:00.000Z`) : null;
+  return date ? parseStrictShanghaiDate(date) : null;
 }
 
 export function readCreateTodoFormData(formData: FormData, today = getShanghaiTodayDate()): CreateTodoFormDataResult {
@@ -84,7 +84,7 @@ export function readCreateTodoFormData(formData: FormData, today = getShanghaiTo
   if (target === "inbox") {
     date = null;
   } else if (target === "date") {
-    if (!dateInput) {
+    if (!dateInput || !dateToTodoDb(dateInput)) {
       errors.date = "请选择一个日期。";
     }
     date = dateInput;

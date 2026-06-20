@@ -3,11 +3,16 @@ import { buildViewKey } from "@/modules/posts/utils";
 
 const VIEW_DEBOUNCE_MS = 10 * 60 * 1000;
 
-const globalForViews = globalThis as unknown as {
-  postViewDebounce?: Map<string, number>;
+type ViewDebounceEntry = {
+  at: number;
+  token: symbol;
 };
 
-const viewDebounce = globalForViews.postViewDebounce ?? new Map<string, number>();
+const globalForViews = globalThis as unknown as {
+  postViewDebounce?: Map<string, ViewDebounceEntry>;
+};
+
+const viewDebounce = globalForViews.postViewDebounce ?? new Map<string, ViewDebounceEntry>();
 
 if (process.env.NODE_ENV !== "production") {
   globalForViews.postViewDebounce = viewDebounce;
@@ -24,8 +29,8 @@ function sweepExpired(now: number) {
 
   lastSweepAt = now;
 
-  for (const [key, lastSeenAt] of viewDebounce) {
-    if (now - lastSeenAt >= VIEW_DEBOUNCE_MS) {
+  for (const [key, lastSeen] of viewDebounce) {
+    if (now - lastSeen.at >= VIEW_DEBOUNCE_MS) {
       viewDebounce.delete(key);
     }
   }
@@ -35,32 +40,77 @@ export function shouldCountView(ip: string, slug: string, now = Date.now()) {
   sweepExpired(now);
 
   const key = buildViewKey(ip, slug);
-  const lastSeenAt = viewDebounce.get(key) ?? 0;
+  const lastSeen = viewDebounce.get(key);
 
-  if (now - lastSeenAt < VIEW_DEBOUNCE_MS) {
-    return false;
-  }
-
-  viewDebounce.set(key, now);
-  return true;
+  return lastSeen === undefined || now - lastSeen.at >= VIEW_DEBOUNCE_MS;
 }
 
-export async function recordPostView(slug: string, ip: string) {
-  if (!shouldCountView(ip, slug)) {
+export function commitCountedView(ip: string, slug: string, now = Date.now()) {
+  viewDebounce.set(buildViewKey(ip, slug), { at: now, token: Symbol("post-view-committed") });
+}
+
+export function reserveCountedView(ip: string, slug: string, now = Date.now()) {
+  const key = buildViewKey(ip, slug);
+  const previous = viewDebounce.get(key);
+  const token = Symbol("post-view-reservation");
+
+  viewDebounce.set(key, { at: now, token });
+
+  return {
+    commit() {
+      if (viewDebounce.get(key)?.token === token) {
+        viewDebounce.set(key, { at: now, token: Symbol("post-view-committed") });
+      }
+    },
+    rollback() {
+      if (viewDebounce.get(key)?.token !== token) {
+        return;
+      }
+
+      if (previous === undefined) {
+        viewDebounce.delete(key);
+        return;
+      }
+
+      viewDebounce.set(key, previous);
+    },
+  };
+}
+
+export function resetPostViewDebounceForTest() {
+  viewDebounce.clear();
+  lastSweepAt = 0;
+}
+
+export async function recordPostView(slug: string, ip: string, now = Date.now()) {
+  if (!shouldCountView(ip, slug, now)) {
     return { counted: false };
   }
 
-  const updated = await db.post.updateMany({
-    where: {
-      slug,
-      status: "PUBLISHED",
-    },
-    data: {
-      views: {
-        increment: 1,
-      },
-    },
-  });
+  const reservation = reserveCountedView(ip, slug, now);
 
-  return { counted: updated.count > 0 };
+  try {
+    const updated = await db.post.updateMany({
+      where: {
+        slug,
+        status: "PUBLISHED",
+      },
+      data: {
+        views: {
+          increment: 1,
+        },
+      },
+    });
+
+    if (updated.count === 0) {
+      reservation.rollback();
+      return { counted: false };
+    }
+
+    reservation.commit();
+    return { counted: true };
+  } catch (error) {
+    reservation.rollback();
+    throw error;
+  }
 }

@@ -2,12 +2,16 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { recordPostView } from "@/modules/posts/view";
 
-function clientIp(request: NextRequest) {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown"
-  );
+function clientKey(request: NextRequest) {
+  if (process.env.TRUST_PROXY_HEADERS === "1") {
+    return (
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown"
+    );
+  }
+
+  return "unknown";
 }
 
 export async function POST(request: NextRequest) {
@@ -24,7 +28,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "缺少文章 Slug。" }, { status: 400 });
   }
 
-  const result = await recordPostView(slug, clientIp(request));
+  const result = await recordPostView(slug, clientKey(request));
 
   return NextResponse.json(result);
 }
