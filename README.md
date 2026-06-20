@@ -2,7 +2,7 @@
 
 单用户个人生活管理网站：游戏 / 书影 / 旅行 / 博客 / 消费 / 待办日历 / 导航 / 首页聚合。
 
-当前进度：Stage 16 已完成首页聚合与活动时间线，网站第一个完整版本已收官；Stage 0-15 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 16 已接入公开首页、私密仪表盘、活动流、PWA 清单、全站数据导出和 404/error 收尾页。收官后方案 A 加固已完成：上传入口具备 15MB 本地预检和结构化错误提示，远程图片转存错误可诊断，Activity 增加 orphan 只读诊断函数。
+当前进度：Stage 16 已完成首页聚合与活动时间线，网站第一个完整版本已收官；Stage 0-15 已完成，真实上线部署与云端备份验收延后到最终上线阶段。Stage 16 已接入公开首页、私密仪表盘、活动流、PWA 清单、全站数据导出和 404/error 收尾页。收官后方案 A 加固已完成：上传入口具备 15MB 本地预检和结构化错误提示，远程图片转存错误可诊断，Activity 增加 orphan 只读诊断函数。审计缺陷修复批次已完成：认证限流、上传/导入边界、SSRF 代理配置、严格日期、金额上限、旅行地点并发、浏览量和排序健壮性均已加固。
 
 ## 本地环境
 
@@ -16,6 +16,8 @@
   - `SITE_URL`（RSS 与公开链接用；本地可用 `http://localhost:3000`）
   - `UPLOAD_DIR`（上传根目录；本地可留空：public 文件回退到 `public/uploads`，private 文件回退到已忽略的 `storage/uploads/private`；生产建议挂载 `/data/uploads`）
   - `OUTBOUND_PROXY`（可选；外部图片和后续出海 API 请求代理）
+  - `OUTBOUND_PROXY_TRUSTS_PRIVATE_GUARD`（可选；仅在可信代理已拒绝 localhost、内网、链路本地和云元数据地址时设置为 `1`，否则配置 `OUTBOUND_PROXY` 会默认失败关闭）
+  - `TRUST_PROXY_HEADERS`（可选；仅在可信反向代理会清洗并覆盖 `X-Forwarded-For` / `X-Real-IP` 时设置为 `1`，用于文章浏览量客户端标识）
   - `STEAM_API_KEY` / `STEAM_ID`（Stage 8 Steam 游戏库同步）
   - `TMDB_API_KEY`（Stage 10 电影 / 剧集搜索补全，可选；失败会回退 NeoDB）
   - `CRON_SECRET`（Stage 8 定时同步接口 Bearer token）
@@ -108,7 +110,7 @@ npx.cmd prisma migrate status
 npm.cmd run db:seed
 ```
 
-`npm.cmd run check` 包含 TypeScript 类型检查、ESLint 和 Vitest。`npm.cmd run e2e` 使用 Playwright，会自动启动 Next dev server；需要配置 `ADMIN_USERNAME`、`ADMIN_PASSWORD`，如覆盖 `BASE_URL`，本地建议使用 `http://127.0.0.1:3000`。
+`npm.cmd run check` 包含 TypeScript 类型检查、ESLint 和 Vitest。`npm.cmd run e2e` 使用 Playwright，会自动启动 Next dev server；需要配置 `ADMIN_USERNAME`、`ADMIN_PASSWORD`，如覆盖 `BASE_URL`，本地建议使用 `http://127.0.0.1:3000`。如果当前 PowerShell 到 WSL Docker PostgreSQL 的 `5432` 端口不可达，e2e 中访问数据库的用例会失败，优先在用户自己的 PowerShell 中运行 `npm.cmd run dev:local` 或保持 WSL 会话存活后复验。
 
 Stage 2 新增 Markdown 渲染依赖：`react-markdown@10.1.0`、`remark-gfm@4.0.1`、`rehype-pretty-code@0.14.3`、`shiki@4.2.0`。
 
@@ -136,7 +138,7 @@ npx.cmd prisma migrate dev
 npx.cmd prisma generate
 ```
 
-Stage 10 新增导入解析依赖：`xlsx@0.18.5`、`iconv-lite@0.7.2`。`/media/import` 支持豆伴 CSV/XLSX 四步导入，CSV 会先尝试 UTF-8，失败后回退 GBK；图书搜索走 NeoDB，电影 / 剧集优先 TMDB，失败时回退 NeoDB。所有导入和搜索补全封面都会在服务端经 `src/lib/storage.ts` 转存到 `/uploads/media/...`，转存失败则留空封面，不保存外链。
+Stage 10 新增导入解析依赖：`xlsx@0.18.5`、`iconv-lite@0.7.2`。`/media/import` 支持豆伴 CSV/XLSX 四步导入，CSV 会先尝试 UTF-8，失败后回退 GBK；图书搜索走 NeoDB，电影 / 剧集优先 TMDB，失败时回退 NeoDB。所有导入和搜索补全封面都会在服务端经 `src/lib/storage.ts` 转存到 `/uploads/media/...`，转存失败则留空封面，不保存外链。审计修复后，书影导入会在读取前检查文件大小，并限制解析行数和列数；非法标记日期按行级错误处理。
 
 Stage 11 未新增第三方依赖；新增数据库迁移 `20260614175559_add_expenses`。本地更新数据库时运行：
 
@@ -152,7 +154,7 @@ Stage 12 未新增第三方依赖；复用 `xlsx@0.18.5` 与 `iconv-lite@0.7.2`�
 
 Stage 13 新增图表依赖：`echarts@6.1.0`、`echarts-for-react@3.0.6`。`/expenses/stats` 提供月 / 周 / 年消费报表；`POST /api/quick/expense` 使用 `Authorization: Bearer ${QUICK_ADD_TOKEN}` 快捷记账，配置方法见 `docs/QUICK_ADD.md`。
 
-Stage 14 新增地图依赖：`leaflet@1.9.4`、`react-leaflet@5.0.0`、`@types/leaflet@1.9.21`。`/trips` 是旅行行程列表，`/trips/[id]` 支持按天维护地点、笔记和私密照片，`/trips/footprint` 展示已完成行程足迹；私密照片通过 `/api/files/private/**` 登录鉴权读取。
+Stage 14 新增地图依赖：`leaflet@1.9.4`、`react-leaflet@5.0.0`、`@types/leaflet@1.9.21`。`/trips` 是旅行行程列表，`/trips/[id]` 支持按天维护地点、笔记和私密照片，`/trips/footprint` 展示已完成行程足迹；私密照片通过 `/api/files/private/**` 登录鉴权读取。审计修复后新增 `TripLocation` 行级地点表与迁移 `20260620010500_trip_locations_table`、`20260620013000_harden_trip_location_migration`、`20260620014500_dedupe_trimmed_trip_locations`，地点新增/删除不再改写整列 JSON，避免并发丢更新。
 
 Stage 15 新增日历依赖：`@fullcalendar/core@6.1.20`、`@fullcalendar/react@6.1.20`、`@fullcalendar/daygrid@6.1.20`、`@fullcalendar/list@6.1.20`、`@fullcalendar/interaction@6.1.20`。新增数据库迁移 `20260615085002_add_special_days`，本地更新数据库时运行：
 
@@ -171,6 +173,8 @@ npx.cmd prisma generate
 ```
 
 `/` 未登录时展示公开编辑部门面，登录后展示收藏册仪表盘；`/admin/settings` 可编辑首页头像、名字和简介，并可导出全站 JSON zip；PWA 清单与图标已接入，但没有 Service Worker。
+
+审计缺陷修复批次未新增第三方依赖；新增认证、上传/导入、日期、金额、旅行、浏览量和排序回归测试。`OUTBOUND_PROXY` 现在默认失败关闭，必须显式设置 `OUTBOUND_PROXY_TRUSTS_PRIVATE_GUARD=1` 才允许走代理；文章浏览量默认不信任客户端传入的代理头，只有 `TRUST_PROXY_HEADERS=1` 时才读取可信代理注入的客户端 IP。
 
 生产 Compose 配置检查（通过 WSL Docker）：
 
@@ -201,10 +205,10 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 消费报表：`/expenses/stats` 提供月 / 周 / 年视图；月视图包含本月支出、环比、收入、结余、分类占比、每日支出、Top 10 商户和分类明细；周视图比较本周 / 上周并按最近 8 周计算星期平均；年视图展示 12 个月支出趋势与收入虚线、年度分类占比和年度总览。
 - 快捷记账：`POST /api/quick/expense` 使用独立 Bearer Token，解析“咖啡 35”这类文本末尾金额，写入 `platform=quick` 支出流水并自动分类；同一 token 每分钟最多 10 次，未配置 `QUICK_ADD_TOKEN` 时接口禁用。
 - 旅行：`/trips` 是私密旅行收藏册，支持计划中 / 已完成 Tab、新建行程、封面、目的地标签和旅行模块色统计徽章；创建时按日期范围自动生成每天的 `TripDay`。
-- 旅行详情：`/trips/[id]` 提供大封面、基础信息、Markdown 总结、预算、计划中行前清单、按天地点/笔记/照片九宫格和 Leaflet 地图；照片上传到 private 区，缩略图用于九宫格，原图点击打开。
+- 旅行详情：`/trips/[id]` 提供大封面、基础信息、Markdown 总结、预算、计划中行前清单、按天地点/笔记/照片九宫格和 Leaflet 地图；照片上传到 private 区，缩略图用于九宫格，原图点击打开；地点写入 `TripLocation` 行并校验经纬度范围。
 - 地图与足迹：地图瓦片优先使用天地图 `vec_w` + `cva_w`，无 `TIANDITU_KEY` 时回退 OSM；地点搜索通过服务端 Nominatim 代理并限频，手动坐标可勾选“来自国内地图”做 GCJ-02 到 WGS-84 转换；`/trips/footprint` 聚合已完成行程地点。
 - 手动记账：`/expenses` 顶部和移动端底部提供“记一笔”入口；表单使用大号金额输入、支出 / 收入切换、按方向过滤的分类宫格、默认今天日期、商户和备注字段，手动流水固定写入 `platform=manual`、`txnNo=null`；未手选分类时会复用导入分类规则尝试自动分类。
-- 账单导入：`/expenses/import` 支持微信 / 支付宝 CSV 上传、平台自动识别、预览统计和确认导入；支付宝 CSV 按 GBK 自动解码，微信金额会剥离 `¥` 前缀，重复交易按 `[platform, txnNo]` 跳过，导入批次写入 `ImportBatch` 并可在 `/expenses/import/history` 查看。
+- 账单导入：`/expenses/import` 支持微信 / 支付宝 CSV 上传、平台自动识别、预览统计和确认导入；支付宝 CSV 按 GBK 自动解码，微信金额会剥离 `¥` 前缀，重复交易按 `[platform, txnNo]` 跳过，同文件重复 `txnNo` 只导入第一行并按行数统计 skipped，导入批次写入 `ImportBatch` 并可在 `/expenses/import/history` 查看。
 - 数据导出：`GET /api/admin/export` 登录后可下载全站 JSON zip，包含 Game、MediaItem、Trip（含 TripDay）、Post、Transaction、ExpenseCategory、Todo、SpecialDay、Link、Activity 和 manifest.json；图片不打包，JSON 保留 URL/key。
 - 分类规则沉淀：流水页行内修改分类时，如果该交易有商户名，会询问是否以后把该商户归到所选分类；确认后会把商户名追加进该分类 keywords。
 - 消费分类管理：`/admin/expense-categories` 支持新增、编辑、删除和拖拽排序分类，使用 `TagInput` 管理自动分类关键词；删除分类时保留流水并将其 `categoryId` 置空。
@@ -218,9 +222,9 @@ wsl.exe -d Ubuntu-24.04 -- sh -lc "cd '/mnt/d/我的网站/TIEDAN'\''s Web' && A
 - 公开博客：`/blog` 与 `/blog/page/[page]` 展示已发布文章列表；`/blog/[slug]` 展示详情、桌面 TOC、上一篇/下一篇；草稿公开端 404。
 - 公开渲染策略：Stage 6A 为保证 `npm run build` 与 Docker/CI 构建不依赖构建期数据库，`/blog`、`/nav`、`/rss.xml` 暂时动态渲染；恢复静态化前需要重新设计构建期数据源或 ISR 策略。
 - 上传与文件：`POST /api/upload` 仅登录可用；`GET /uploads/**` 只服务 public 区文件并带长缓存头，匿名可访问博客图片；private 区文件只通过登录鉴权的 `/api/files/private/**` 读取。
-- 上传体验：所有前端 `/api/upload` 入口统一做 15MB 本地预检，只允许 jpeg/png/webp/gif；上传失败会区分文件过大、格式不支持、登录失效和服务端处理失败。远程图片转存会区分远端过大、下载失败、内容类型不支持和 SSRF 拦截。
+- 上传体验：所有前端 `/api/upload` 入口统一做 15MB 本地预检，只允许 jpeg/png/webp/gif；服务端会用实际图片元数据识别格式并拒绝伪装 SVG；上传失败会区分文件过大、格式不支持、登录失效和服务端处理失败。远程图片转存会区分远端过大、下载失败、内容类型不支持和 SSRF 拦截。
 - Activity 诊断：`src/lib/activity-diagnostics.ts` 提供只读 orphan 检测，当前覆盖 posts/media/trips/expenses，不会自动删除历史记录。
-- RSS 与浏览量：`/rss.xml` 输出最近 20 篇已发布文章；详情页客户端挂载后通过 `/api/posts/view` 上报浏览量，同 IP 同文章短时去抖。
+- RSS 与浏览量：`/rss.xml` 输出最近 20 篇已发布文章；详情页客户端挂载后通过 `/api/posts/view` 上报浏览量，数据库确认更新后才消耗去抖窗口；默认不信任客户端伪造的 `X-Forwarded-For`，同客户端标识同文章短时去抖。
 - PWA：`manifest.webmanifest`、192/512 图标和 apple-touch-icon 已接入，添加到主屏幕后使用独立窗口名称和站点图标；当前不实现 Service Worker。
 - 通用组件：`PageHeader`、`EmptyState`、`ConfirmDialog`、`TagInput`、`StatusBadge`、`RatingStars`、`MarkdownEditor`、`MarkdownRenderer`。
 - 全站收尾：根 layout 使用统一 `<title>` 模板；全站 404 和 error 页使用中文文案；Stage 2 临时 `/admin/playground` 已删除。
