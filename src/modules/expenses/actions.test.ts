@@ -70,6 +70,24 @@ describe("reorderExpenseCategoriesAction", () => {
     mocks.db.expenseCategory.findMany.mockResolvedValue([{ id: "food" }, { id: "salary" }]);
   });
 
+  it("updates every category when the ordered ids are complete", async () => {
+    await expect(reorderExpenseCategoriesAction(["salary", "food"])).resolves.toMatchObject({
+      ok: true,
+      message: "分类排序已更新。",
+    });
+
+    expect(mocks.db.expenseCategory.update).toHaveBeenNthCalledWith(1, {
+      where: { id: "salary" },
+      data: { sort: 10 },
+    });
+    expect(mocks.db.expenseCategory.update).toHaveBeenNthCalledWith(2, {
+      where: { id: "food" },
+      data: { sort: 20 },
+    });
+    expect(mocks.db.$transaction).toHaveBeenCalledTimes(1);
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/admin/expense-categories");
+  });
+
   it("rejects incomplete ordered ids without writing partial sort values", async () => {
     await expect(reorderExpenseCategoriesAction(["salary"])).resolves.toMatchObject({
       ok: false,
