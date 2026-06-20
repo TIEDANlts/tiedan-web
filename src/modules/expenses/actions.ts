@@ -44,7 +44,7 @@ async function nextCategorySort() {
   return (aggregate._max.sort ?? 0) + 10;
 }
 
-function buildCompleteSortUpdates(currentIds: string[], orderedIds: string[], step = 10) {
+export function buildCompleteSortUpdates(currentIds: string[], orderedIds: string[], step = 10) {
   const currentIdSet = new Set(currentIds);
   const orderedIdSet = new Set(orderedIds);
 
